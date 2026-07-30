@@ -1,0 +1,19 @@
+{
+  "appId": "com.academia.collegeattendance",
+  "appName": "Academia Mobile",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "Camera": {
+      "permissions": ["camera"]
+    },
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#1e1b4b",
+      "showSpinner": false
+    }
+  }
+}

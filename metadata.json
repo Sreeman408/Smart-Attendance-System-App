@@ -1,0 +1,6 @@
+{
+  "name": "Academia - College Attendance Management System",
+  "description": "Mobile-first College Attendance Management System with multi-role portals (Admin, Faculty, Student, Parent), attendance analytics calendar, QR scanner, timetable linking, leaves management, and exportable reports.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
