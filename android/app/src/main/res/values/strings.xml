@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Annamalai University CMS</string>
+    <string name="title_activity_main">Annamalai University CMS</string>
+    <string name="package_name">edu.annamalai.cms</string>
+    <string name="custom_url_scheme">edu.annamalai.cms</string>
+</resources>
