@@ -1,16 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Role } from './types';
+import { Role, User, Student, Faculty, Subject, TimetableSlot, AttendanceRecord, LeaveRequest } from './types';
+import { getStoredActiveSession, clearActiveSession } from './services/authService';
 import {
-  initLocalStorage,
-  subscribeToStore,
-  getCurrentUser,
-  getStudents,
-  getFaculty,
-  getSubjects,
-  getTimetable,
-  getAttendanceRecords,
-  getLeaves
-} from './services/storage';
+  fetchStudentsFromDB, fetchFacultyFromDB, fetchSubjectsFromDB,
+  fetchTimetableFromDB, fetchAttendanceRecordsFromDB, fetchLeavesFromDB
+} from './services/dbService';
+import { LoginGateway } from './components/auth/LoginGateway';
 import { Header } from './components/layout/Header';
 import { BottomNav } from './components/layout/BottomNav';
 import { StudentDashboard } from './components/dashboard/StudentDashboard';
@@ -19,55 +14,55 @@ import { ParentDashboard } from './components/dashboard/ParentDashboard';
 import { AdminDashboard } from './components/dashboard/AdminDashboard';
 
 export default function App() {
-  // Initialize seed state
-  useEffect(() => {
-    initLocalStorage();
-  }, []);
-
-  const [currentUser, setCurrentUser] = useState(getCurrentUser());
-  const [activeRole, setActiveRole] = useState<Role>(currentUser.role || 'student');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [activeRole, setActiveRole] = useState<Role>('student');
   const [activeTab, setActiveTab] = useState<string>('calendar');
+  const [loadingSession, setLoadingSession] = useState(true);
 
-  // Store data states
-  const [students, setStudents] = useState(getStudents());
-  const [faculty, setFaculty] = useState(getFaculty());
-  const [subjects, setSubjects] = useState(getSubjects());
-  const [timetable, setTimetable] = useState(getTimetable());
-  const [attendanceRecords, setAttendanceRecords] = useState(getAttendanceRecords());
-  const [leaves, setLeaves] = useState(getLeaves());
+  // DB States
+  const [students, setStudents] = useState<Student[]>([]);
+  const [faculty, setFaculty] = useState<Faculty[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [timetable, setTimetable] = useState<TimetableSlot[]>([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string>('STU202401');
 
-  // Parent child selector state
-  const [selectedChildId, setSelectedChildId] = useState<string>(
-    students[0]?.id || 'STU202401'
-  );
-
-  // Subscribe to store updates
+  // Load session & DB data on mount
   useEffect(() => {
-    return subscribeToStore(() => {
-      const user = getCurrentUser();
-      setCurrentUser(user);
-      setStudents(getStudents());
-      setFaculty(getFaculty());
-      setSubjects(getSubjects());
-      setTimetable(getTimetable());
-      setAttendanceRecords(getAttendanceRecords());
-      setLeaves(getLeaves());
-    });
+    async function loadInitialData() {
+      setLoadingSession(true);
+      const session = await getStoredActiveSession();
+      if (session) {
+        setCurrentUser(session);
+        setActiveRole(session.role);
+        setDefaultTabForRole(session.role);
+      }
+      await refreshDBData();
+      setLoadingSession(false);
+    }
+    loadInitialData();
   }, []);
 
-  const refreshData = () => {
-    setStudents(getStudents());
-    setFaculty(getFaculty());
-    setSubjects(getSubjects());
-    setTimetable(getTimetable());
-    setAttendanceRecords(getAttendanceRecords());
-    setLeaves(getLeaves());
+  const refreshDBData = async () => {
+    const stus = await fetchStudentsFromDB();
+    const facs = await fetchFacultyFromDB();
+    const subs = await fetchSubjectsFromDB();
+    const tt = await fetchTimetableFromDB();
+    const atts = await fetchAttendanceRecordsFromDB();
+    const lvs = await fetchLeavesFromDB();
+
+    setStudents(stus);
+    setFaculty(facs);
+    setSubjects(subs);
+    setTimetable(tt);
+    setAttendanceRecords(atts);
+    setLeaves(lvs);
+    if (stus.length > 0) setSelectedChildId(stus[0].id);
   };
 
-  const handleRoleChange = (newRole: Role) => {
-    setActiveRole(newRole);
-    // Set appropriate default tab per role
-    switch (newRole) {
+  const setDefaultTabForRole = (role: Role) => {
+    switch (role) {
       case 'student': setActiveTab('calendar'); break;
       case 'faculty': setActiveTab('dashboard'); break;
       case 'parent': setActiveTab('calendar'); break;
@@ -75,19 +70,53 @@ export default function App() {
     }
   };
 
+  const handleLoginSuccess = (user: User) => {
+    setCurrentUser(user);
+    setActiveRole(user.role);
+    setDefaultTabForRole(user.role);
+  };
+
+  const handleLogout = async () => {
+    await clearActiveSession();
+    setCurrentUser(null);
+  };
+
+  const handleRoleChange = (newRole: Role) => {
+    setActiveRole(newRole);
+    setDefaultTabForRole(newRole);
+  };
+
+  if (loadingSession) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center space-y-4">
+        <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm font-bold tracking-wider text-amber-400">Loading Annamalai University CMS...</p>
+      </div>
+    );
+  }
+
+  // Render Login Gateway if unauthenticated
+  if (!currentUser) {
+    return <LoginGateway onLoginSuccess={handleLoginSuccess} />;
+  }
+
   const currentStudent = students.find(s => s.id === (currentUser.studentId || 'STU202401')) || students[0];
   const currentFaculty = faculty.find(f => f.id === (currentUser.facultyId || 'FAC101')) || faculty[0];
   const pendingLeavesCount = leaves.filter(l => l.status === 'pending').length;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors selection:bg-amber-500 selection:text-slate-950">
       
       {/* App Header Bar */}
       <Header
         activeRole={activeRole}
         onRoleChange={handleRoleChange}
+        currentUser={currentUser}
+        onUserUpdated={setCurrentUser}
+        onLogout={handleLogout}
         selectedChildId={selectedChildId}
         onSelectChild={setSelectedChildId}
+        studentsList={students}
       />
 
       {/* Body Layout: Desktop Sidebar + Main Content */}
@@ -148,7 +177,7 @@ export default function App() {
               leaves={leaves}
               activeTab={activeTab}
               onTabChange={setActiveTab}
-              onDataChanged={refreshData}
+              onDataChanged={refreshDBData}
             />
           )}
 

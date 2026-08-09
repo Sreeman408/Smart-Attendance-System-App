@@ -1,6 +1,6 @@
 {
-  "appId": "com.academia.collegeattendance",
-  "appName": "Academia Mobile",
+  "appId": "edu.annamalai.cms",
+  "appName": "Annamalai University CMS",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {
@@ -12,8 +12,13 @@
     },
     "SplashScreen": {
       "launchShowDuration": 2000,
-      "backgroundColor": "#1e1b4b",
-      "showSpinner": false
+      "backgroundColor": "#800020",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#800020"
     }
   }
 }

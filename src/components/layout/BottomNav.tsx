@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Calendar, LayoutDashboard, QrCode, Clock, FileText,
-  Users, CheckSquare, Shield, Contact, PhoneCall, FileSpreadsheet, Smartphone
+  Users, CheckSquare, Shield, Contact, PhoneCall, FileSpreadsheet, Smartphone, UserCheck
 } from 'lucide-react';
 import { Role } from '../../types';
 
@@ -38,16 +38,16 @@ export const BottomNav: React.FC<Props> = ({
 
       case 'faculty':
         return [
-          { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+          { id: 'dashboard', label: 'Roster', icon: LayoutDashboard },
           { id: 'mark', label: 'Mark Class', icon: CheckSquare },
           { id: 'qr_gen', label: 'QR Generator', icon: QrCode },
           { id: 'timetable', label: 'Schedule', icon: Clock },
-          { id: 'leaves', label: 'Leaves', icon: FileText, badge: pendingLeavesCount > 0 ? `${pendingLeavesCount}` : undefined }
+          { id: 'leaves', label: 'Leaves', icon: FileText }
         ];
 
       case 'parent':
         return [
-          { id: 'calendar', label: 'Child Calendar', icon: Calendar },
+          { id: 'calendar', label: 'Ward Calendar', icon: Calendar },
           { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
           { id: 'timetable', label: 'Schedule', icon: Clock },
           { id: 'faculty', label: 'Faculty List', icon: PhoneCall },
@@ -57,10 +57,10 @@ export const BottomNav: React.FC<Props> = ({
       case 'admin':
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'users', label: 'Users', icon: Users },
+          { id: 'users', label: 'Directory', icon: Users },
           { id: 'timetable', label: 'Timetable', icon: Clock },
-          { id: 'leaves', label: 'Approvals', icon: FileText, badge: pendingLeavesCount > 0 ? `${pendingLeavesCount}` : undefined },
-          { id: 'reports', label: 'Reports & Logs', icon: FileSpreadsheet }
+          { id: 'leaves', label: 'Approvals', icon: FileText },
+          { id: 'reports', label: 'Reports', icon: FileSpreadsheet }
         ];
     }
   };
@@ -81,13 +81,13 @@ export const BottomNav: React.FC<Props> = ({
                 onClick={() => onTabChange(item.id)}
                 className={`relative flex flex-col items-center justify-center flex-1 h-full py-1 transition-all ${
                   isActive
-                    ? 'text-indigo-600 dark:text-indigo-400 font-bold'
+                    ? 'text-amber-600 dark:text-amber-400 font-bold'
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
                 {/* Active Indicator Bar */}
                 {isActive && (
-                  <span className="absolute top-0 w-8 h-1 bg-gradient-to-r from-indigo-600 to-indigo-500 rounded-b-full shadow-xs shadow-indigo-500/50" />
+                  <span className="absolute top-0 w-8 h-1 bg-gradient-to-r from-red-900 to-amber-500 rounded-b-full shadow-sm" />
                 )}
 
                 <div className="relative">
@@ -111,7 +111,7 @@ export const BottomNav: React.FC<Props> = ({
       {/* Desktop Sidebar (Rendered on md+ screens) */}
       <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-4 space-y-2 shrink-0 min-h-[calc(100vh-65px)]">
         <div className="px-3 py-2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-          {activeRole} Navigation
+          {activeRole} Portal Menu
         </div>
 
         {navItems.map((item) => {
@@ -121,9 +121,9 @@ export const BottomNav: React.FC<Props> = ({
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all ${
+              className={`flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
                 isActive
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                  ? 'bg-gradient-to-r from-red-900 via-red-800 to-amber-600 text-white shadow-md'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
             >
@@ -131,13 +131,6 @@ export const BottomNav: React.FC<Props> = ({
                 <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`} />
                 <span>{item.label}</span>
               </div>
-              {item.badge && (
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  isActive ? 'bg-white text-indigo-700' : 'bg-rose-500 text-white'
-                }`}>
-                  {item.badge}
-                </span>
-              )}
             </button>
           );
         })}

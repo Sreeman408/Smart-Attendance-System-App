@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
-import {
-  Student, Faculty, Subject, TimetableSlot, LeaveRequest, AuditLog
-} from '../../types';
-import {
-  Users, BookOpen, Clock, FileText, FileSpreadsheet, Plus, Upload, Trash2, Smartphone, Shield, CheckCircle
-} from 'lucide-react';
+import { Student, Faculty, Subject, TimetableSlot, LeaveRequest, AuditLog } from '../../types';
+import { Users, BookOpen, Clock, FileText, FileSpreadsheet, Plus, Upload, Trash2, Shield, Calendar, UserCheck, CheckCircle2 } from 'lucide-react';
 import { ReportsManager } from '../reports/ReportsManager';
 import { LeaveManager } from '../leaves/LeaveManager';
-import { saveStudents, saveFaculty, saveSubjects, saveTimetable, logAuditAction, getCurrentUser } from '../../services/storage';
+import { PendingApprovalsManager } from '../admin/PendingApprovalsManager';
+import { SaturdayConfigManager } from '../admin/SaturdayConfigManager';
+import { BulkUploadModal } from '../admin/BulkUploadModal';
+import { saveStudentToDB, saveFacultyToDB } from '../../services/dbService';
 
 interface Props {
   students: Student[];
@@ -30,74 +29,66 @@ export const AdminDashboard: React.FC<Props> = ({
   onTabChange,
   onDataChanged
 }) => {
-  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
-  const [showAddFacultyModal, setShowAddFacultyModal] = useState(false);
-  const [bulkImportStatus, setBulkImportStatus] = useState<string | null>(null);
+  const [subSection, setSubSection] = useState<'overview' | 'approvals' | 'saturday'>('overview');
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [showAddStudent, setShowAddStudent] = useState(false);
+  const [showAddFaculty, setShowAddFaculty] = useState(false);
 
-  // New Student Form
-  const [newRollNo, setNewRollNo] = useState('');
-  const [newName, setNewName] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [newDept, setNewDept] = useState('Computer Science');
-  const [newSem, setNewSem] = useState(4);
+  // New Student state
+  const [stuRoll, setStuRoll] = useState('');
+  const [stuName, setStuName] = useState('');
+  const [stuEmail, setStuEmail] = useState('');
+  const [stuDept, setStuDept] = useState('Computer Science');
+  const [stuYear, setStuYear] = useState('2nd Year');
+  const [stuSem, setStuSem] = useState(4);
 
-  // New Faculty Form
-  const [newFacCode, setNewFacCode] = useState('');
-  const [newFacName, setNewFacName] = useState('');
-  const [newFacEmail, setNewFacEmail] = useState('');
+  // New Faculty state
+  const [facCode, setFacCode] = useState('');
+  const [facName, setFacName] = useState('');
+  const [facEmail, setFacEmail] = useState('');
 
-  const handleCreateStudent = (e: React.FormEvent) => {
+  const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName || !newRollNo) return;
-
-    const newStudent: Student = {
+    if (!stuRoll || !stuName) return;
+    const newStu: Student = {
       id: `STU_${Date.now()}`,
-      rollNo: newRollNo,
-      name: newName,
-      email: newEmail || `${newRollNo.toLowerCase()}@student.edu`,
-      department: newDept,
-      semester: Number(newSem),
-      section: 'A'
+      rollNo: stuRoll,
+      name: stuName,
+      email: stuEmail || `${stuRoll.toLowerCase()}@student.edu`,
+      department: stuDept,
+      year: stuYear,
+      semester: Number(stuSem),
+      section: 'A',
+      approvalStatus: 'approved'
     };
-
-    saveStudents([newStudent, ...students]);
-    logAuditAction(getCurrentUser(), 'Student Created', `Added student ${newName} (${newRollNo})`);
+    await saveStudentToDB(newStu);
+    setShowAddStudent(false);
     onDataChanged();
-    setShowAddStudentModal(false);
-    setNewRollNo('');
-    setNewName('');
-    setNewEmail('');
+    setStuRoll('');
+    setStuName('');
+    setStuEmail('');
   };
 
-  const handleCreateFaculty = (e: React.FormEvent) => {
+  const handleAddFaculty = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFacName || !newFacCode) return;
-
+    if (!facCode || !facName) return;
     const newFac: Faculty = {
       id: `FAC_${Date.now()}`,
-      facultyCode: newFacCode,
-      name: newFacName,
-      email: newFacEmail || `${newFacCode.toLowerCase()}@college.edu`,
+      facultyCode: facCode,
+      name: facName,
+      email: facEmail || `${facCode.toLowerCase()}@college.edu`,
       department: 'Computer Science',
       designation: 'Assistant Professor',
-      phone: '+1 (555) 000-1122',
-      subjectsHandled: []
+      phone: '+91 98401 11223',
+      subjectsHandled: [],
+      approvalStatus: 'approved'
     };
-
-    saveFaculty([newFac, ...faculty]);
-    logAuditAction(getCurrentUser(), 'Faculty Created', `Added faculty ${newFacName} (${newFacCode})`);
+    await saveFacultyToDB(newFac);
+    setShowAddFaculty(false);
     onDataChanged();
-    setShowAddFacultyModal(false);
-    setNewFacCode('');
-    setNewFacName('');
-  };
-
-  const handleSimulateBulkUpload = () => {
-    setBulkImportStatus('Processing CSV Batch upload...');
-    setTimeout(() => {
-      setBulkImportStatus('✅ Batch imported 12 Students & 3 Faculty records successfully!');
-      setTimeout(() => setBulkImportStatus(null), 3000);
-    }, 1000);
+    setFacCode('');
+    setFacName('');
+    setFacEmail('');
   };
 
   if (activeTab === 'reports') {
@@ -105,213 +96,238 @@ export const AdminDashboard: React.FC<Props> = ({
   }
 
   if (activeTab === 'leaves') {
-    return <LeaveManager user={getCurrentUser()} onLeaveUpdated={onDataChanged} />;
+    return <LeaveManager user={{ id: 'admin', name: 'Admin', role: 'admin', email: 'admin@college.edu' }} onLeaveUpdated={onDataChanged} />;
   }
 
   return (
-    <div className="space-y-4 max-w-5xl mx-auto animate-fade-in">
+    <div className="space-y-6 max-w-6xl mx-auto animate-fade-in pb-12">
       
-      {/* Top Admin Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
-          <span className="text-xs font-semibold text-slate-500">Total Students</span>
-          <p className="text-2xl font-extrabold font-heading text-slate-900 dark:text-white mt-1">
-            {students.length}
-          </p>
-        </div>
-
-        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
-          <span className="text-xs font-semibold text-slate-500">Faculty Members</span>
-          <p className="text-2xl font-extrabold font-heading text-slate-900 dark:text-white mt-1">
-            {faculty.length}
-          </p>
-        </div>
-
-        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
-          <span className="text-xs font-semibold text-slate-500">Courses / Subjects</span>
-          <p className="text-2xl font-extrabold font-heading text-slate-900 dark:text-white mt-1">
-            {subjects.length}
-          </p>
-        </div>
-
-        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
-          <span className="text-xs font-semibold text-slate-500">Pending Leaves</span>
-          <p className="text-2xl font-extrabold font-heading text-rose-600 dark:text-rose-400 mt-1">
-            {leaves.filter(l => l.status === 'pending').length}
-          </p>
-        </div>
-      </div>
-
-      {/* Action Controls & Bulk Upload */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowAddStudentModal(true)}
-            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            Add Student
-          </button>
-
-          <button
-            onClick={() => setShowAddFacultyModal(true)}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            Add Faculty
-          </button>
-        </div>
+      {/* Admin Section Tabs Header */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-200 dark:border-slate-800">
+        <button
+          onClick={() => setSubSection('overview')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
+            subSection === 'overview'
+              ? 'bg-amber-500 text-slate-950 shadow-md'
+              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Shield className="w-4 h-4" />
+          Dashboard Overview
+        </button>
 
         <button
-          onClick={handleSimulateBulkUpload}
-          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
+          onClick={() => setSubSection('approvals')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
+            subSection === 'approvals'
+              ? 'bg-amber-500 text-slate-950 shadow-md'
+              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <UserCheck className="w-4 h-4" />
+          Pending Registration Approvals
+        </button>
+
+        <button
+          onClick={() => setSubSection('saturday')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
+            subSection === 'saturday'
+              ? 'bg-amber-500 text-slate-950 shadow-md'
+              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          Saturday Classes Schedule
+        </button>
+
+        <button
+          onClick={() => setShowBulkUpload(true)}
+          className="ml-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 transition-all whitespace-nowrap"
         >
           <Upload className="w-4 h-4" />
-          Bulk CSV Import
+          Bulk Batch Upload
         </button>
       </div>
 
-      {bulkImportStatus && (
-        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-bold text-emerald-800 dark:text-emerald-300">
-          {bulkImportStatus}
-        </div>
+      {/* RENDER SUBSECTION: PENDING APPROVALS */}
+      {subSection === 'approvals' && <PendingApprovalsManager />}
+
+      {/* RENDER SUBSECTION: SATURDAY CONFIG */}
+      {subSection === 'saturday' && <SaturdayConfigManager />}
+
+      {/* RENDER SUBSECTION: OVERVIEW */}
+      {subSection === 'overview' && (
+        <>
+          {/* Top Metric Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
+              <span className="text-xs font-semibold text-slate-500">Enrolled Students</span>
+              <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
+                {students.length}
+              </p>
+            </div>
+
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
+              <span className="text-xs font-semibold text-slate-500">Faculty Roster</span>
+              <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
+                {faculty.length}
+              </p>
+            </div>
+
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
+              <span className="text-xs font-semibold text-slate-500">Subjects / Labs</span>
+              <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
+                {subjects.length}
+              </p>
+            </div>
+
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
+              <span className="text-xs font-semibold text-slate-500">Pending Leaves</span>
+              <p className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">
+                {leaves.filter(l => l.status === 'pending').length}
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Action Controls */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowAddStudent(true)}
+                className="px-3.5 py-2 bg-gradient-to-r from-red-900 to-amber-600 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                Add Student
+              </button>
+
+              <button
+                onClick={() => setShowAddFaculty(true)}
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                Add Faculty
+              </button>
+            </div>
+          </div>
+
+          {/* Add Student Modal Popup */}
+          {showAddStudent && (
+            <div className="p-5 bg-white dark:bg-slate-900 border-2 border-amber-500 rounded-2xl shadow-xl space-y-3">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white">Add New Student Profile</h4>
+              <form onSubmit={handleAddStudent} className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Roll No (e.g. 24CS06)"
+                    value={stuRoll}
+                    onChange={e => setStuRoll(e.target.value)}
+                    className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
+                  />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Full Name"
+                    value={stuName}
+                    onChange={e => setStuName(e.target.value)}
+                    className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email Address"
+                    value={stuEmail}
+                    onChange={e => setStuEmail(e.target.value)}
+                    className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button type="button" onClick={() => setShowAddStudent(false)} className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 text-xs font-bold rounded-xl">Cancel</button>
+                  <button type="submit" className="px-3 py-1.5 bg-amber-500 text-slate-950 font-bold text-xs rounded-xl shadow-md">Save Student</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Add Faculty Modal Popup */}
+          {showAddFaculty && (
+            <div className="p-5 bg-white dark:bg-slate-900 border-2 border-amber-500 rounded-2xl shadow-xl space-y-3">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white">Add New Faculty Member</h4>
+              <form onSubmit={handleAddFaculty} className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Faculty Code (e.g. CS-FAC-05)"
+                    value={facCode}
+                    onChange={e => setFacCode(e.target.value)}
+                    className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
+                  />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Faculty Name"
+                    value={facName}
+                    onChange={e => setFacName(e.target.value)}
+                    className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email Address"
+                    value={facEmail}
+                    onChange={e => setFacEmail(e.target.value)}
+                    className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button type="button" onClick={() => setShowAddFaculty(false)} className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 text-xs font-bold rounded-xl">Cancel</button>
+                  <button type="submit" className="px-3 py-1.5 bg-amber-500 text-slate-950 font-bold text-xs rounded-xl shadow-md">Save Faculty</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Student Roster Table */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+            <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Users className="w-4 h-4 text-amber-500" />
+              Active Student Directory
+            </h4>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase font-bold border-b border-slate-200 dark:border-slate-800">
+                  <tr>
+                    <th className="p-3">Roll No</th>
+                    <th className="p-3">Name</th>
+                    <th className="p-3">Department</th>
+                    <th className="p-3">Year / Sem</th>
+                    <th className="p-3 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {students.map(st => (
+                    <tr key={st.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                      <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{st.rollNo}</td>
+                      <td className="p-3 font-bold text-slate-900 dark:text-white">{st.name}</td>
+                      <td className="p-3 text-slate-500">{st.department}</td>
+                      <td className="p-3 font-semibold">{st.year || '2nd Year'} (Sem {st.semester})</td>
+                      <td className="p-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                        {st.approvalStatus ? st.approvalStatus.toUpperCase() : 'APPROVED'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
 
-      {/* Add Student Modal */}
-      {showAddStudentModal && (
-        <div className="p-5 bg-white dark:bg-slate-900 border-2 border-indigo-500 rounded-2xl shadow-xl space-y-3">
-          <h4 className="text-sm font-bold text-slate-900 dark:text-white">Add New Student</h4>
-          <form onSubmit={handleCreateStudent} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <input
-                type="text"
-                placeholder="Roll No (e.g. 24CS05)"
-                value={newRollNo}
-                onChange={e => setNewRollNo(e.target.value)}
-                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
-                required
-              />
-              <input
-                type="text"
-                placeholder="Full Name"
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
-                required
-              />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => setShowAddStudentModal(false)}
-                className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 text-xs font-bold rounded-xl"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-xl shadow-md"
-              >
-                Save Student
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Add Faculty Modal */}
-      {showAddFacultyModal && (
-        <div className="p-5 bg-white dark:bg-slate-900 border-2 border-indigo-500 rounded-2xl shadow-xl space-y-3">
-          <h4 className="text-sm font-bold text-slate-900 dark:text-white">Add New Faculty</h4>
-          <form onSubmit={handleCreateFaculty} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <input
-                type="text"
-                placeholder="Faculty Code (e.g. CS-FAC-03)"
-                value={newFacCode}
-                onChange={e => setNewFacCode(e.target.value)}
-                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
-                required
-              />
-              <input
-                type="text"
-                placeholder="Faculty Name"
-                value={newFacName}
-                onChange={e => setNewFacName(e.target.value)}
-                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
-                required
-              />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => setShowAddFacultyModal(false)}
-                className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 text-xs font-bold rounded-xl"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-xl shadow-md"
-              >
-                Save Faculty
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Students Directory */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
-        <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <Users className="w-4 h-4 text-indigo-500" />
-          Enrolled Students Master Directory
-        </h4>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase font-bold border-b border-slate-200 dark:border-slate-800">
-              <tr>
-                <th className="p-3">Roll No</th>
-                <th className="p-3">Name</th>
-                <th className="p-3">Department</th>
-                <th className="p-3">Semester</th>
-                <th className="p-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {students.map(st => (
-                <tr key={st.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                  <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">
-                    {st.rollNo}
-                  </td>
-                  <td className="p-3 font-bold text-slate-900 dark:text-white">
-                    {st.name}
-                  </td>
-                  <td className="p-3 text-slate-500 dark:text-slate-400">
-                    {st.department}
-                  </td>
-                  <td className="p-3 font-semibold">
-                    Sem {st.semester} ({st.section})
-                  </td>
-                  <td className="p-3 text-right">
-                    <button
-                      onClick={() => {
-                        saveStudents(students.filter(s => s.id !== st.id));
-                        onDataChanged();
-                      }}
-                      className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
-                      title="Remove student"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Bulk Upload Modal */}
+      <BulkUploadModal
+        isOpen={showBulkUpload}
+        onClose={() => setShowBulkUpload(false)}
+        onSuccess={onDataChanged}
+      />
 
     </div>
   );

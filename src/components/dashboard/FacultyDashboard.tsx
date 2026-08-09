@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Faculty, Subject, Student, AttendanceRecord, TimetableSlot, AttendanceStatus } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { Faculty, Subject, Student, AttendanceRecord, TimetableSlot, AttendanceStatus, SaturdayConfig } from '../../types';
 import { QRGenerator } from '../qr/QRGenerator';
-import { CheckSquare, QrCode, Clock, Users, CheckCircle2, XCircle, AlertCircle, Save, Sparkles } from 'lucide-react';
-import { addAttendanceRecord, getAttendanceRecords, logAuditAction, getCurrentUser } from '../../services/storage';
+import { CheckSquare, QrCode, Clock, Users, CheckCircle2, Save, Calendar, Download, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { addAttendanceRecordToDB, fetchAttendanceRecordsFromDB, fetchSaturdayConfigFromDB, addAuditLogDB } from '../../services/dbService';
+import * as XLSX from 'xlsx';
 
 interface Props {
   faculty: Faculty;
@@ -23,41 +24,55 @@ export const FacultyDashboard: React.FC<Props> = ({
 }) => {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id || '');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  
+  const [isSaturdaySession, setIsSaturdaySession] = useState<boolean>(false);
+  const [saturdayConfig, setSaturdayConfig] = useState<SaturdayConfig>({ mappedDay: 'Monday', enabled: true });
+  const [allAttendance, setAllAttendance] = useState<AttendanceRecord[]>([]);
+
   // Faculty subjects
-  const facultySubjects = subjects.filter(s => s.facultyId === faculty.id || faculty.subjectsHandled.includes(s.id));
-  const currentSubject = subjects.find(s => s.id === selectedSubjectId) || subjects[0];
+  const facultySubjects = subjects.filter(s => s.facultyId === faculty.id || (faculty.subjectsHandled && faculty.subjectsHandled.includes(s.id)));
+  const currentSubject = subjects.find(s => s.id === selectedSubjectId) || subjects[0] || facultySubjects[0];
+
+  useEffect(() => {
+    async function initData() {
+      const cfg = await fetchSaturdayConfigFromDB();
+      setSaturdayConfig(cfg);
+      const recs = await fetchAttendanceRecordsFromDB();
+      setAllAttendance(recs);
+    }
+    initData();
+  }, []);
+
+  // Update Saturday boolean based on date picked
+  useEffect(() => {
+    if (selectedDate) {
+      const day = new Date(selectedDate).getDay();
+      setIsSaturdaySession(day === 6);
+    }
+  }, [selectedDate]);
 
   // In-memory attendance grid state for current class marking
   const [attendanceMap, setAttendanceMap] = useState<Record<string, AttendanceStatus>>(() => {
     const initial: Record<string, AttendanceStatus> = {};
-    students.forEach(st => {
-      initial[st.id] = 'present';
-    });
+    students.forEach(st => { initial[st.id] = 'present'; });
     return initial;
   });
 
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
   const handleStatusToggle = (studentId: string, status: AttendanceStatus) => {
-    setAttendanceMap(prev => ({
-      ...prev,
-      [studentId]: status
-    }));
+    setAttendanceMap(prev => ({ ...prev, [studentId]: status }));
   };
 
   const handleBulkMark = (status: AttendanceStatus) => {
     const updated: Record<string, AttendanceStatus> = {};
-    students.forEach(st => {
-      updated[st.id] = status;
-    });
+    students.forEach(st => { updated[st.id] = status; });
     setAttendanceMap(updated);
   };
 
-  const handleSaveAttendance = () => {
+  const handleSaveAttendance = async () => {
     if (!currentSubject) return;
 
-    students.forEach(st => {
+    for (const st of students) {
       const status = attendanceMap[st.id] || 'present';
       const record: AttendanceRecord = {
         id: `att_${selectedDate}_${currentSubject.id}_${st.id}`,
@@ -70,198 +85,244 @@ export const FacultyDashboard: React.FC<Props> = ({
         status,
         markedByFacultyId: faculty.id,
         markedAt: new Date().toISOString(),
-        method: 'manual'
+        method: 'manual',
+        isSaturday: isSaturdaySession
       };
-      addAttendanceRecord(record);
-    });
+      await addAttendanceRecordToDB(record);
+    }
 
-    logAuditAction(
-      getCurrentUser(),
-      'Class Attendance Marked',
-      `Marked attendance for ${students.length} students in ${currentSubject.name} (${currentSubject.type}) on ${selectedDate}`
+    await addAuditLogDB(
+      faculty.id,
+      faculty.name,
+      'faculty',
+      'Faculty Marked Attendance',
+      `Marked ${isSaturdaySession ? 'SATURDAY' : 'REGULAR'} attendance for ${students.length} students in ${currentSubject.name}`
     );
 
-    setSaveSuccessMsg(`✅ Successfully saved attendance for ${currentSubject.name} on ${selectedDate}!`);
-    setTimeout(() => setSaveSuccessMsg(null), 3000);
+    // Refresh records
+    const updatedRecs = await fetchAttendanceRecordsFromDB();
+    setAllAttendance(updatedRecs);
+
+    setSaveSuccessMsg(`✅ Saved ${isSaturdaySession ? 'Saturday' : ''} attendance for ${currentSubject.name} on ${selectedDate}!`);
+    setTimeout(() => setSaveSuccessMsg(null), 4000);
+  };
+
+  // Export Saturday Class Attendance Data
+  const exportSaturdayReport = () => {
+    const saturdayRecords = allAttendance.filter(r => r.isSaturday || new Date(r.date).getDay() === 6);
+    if (saturdayRecords.length === 0) {
+      alert('No Saturday attendance records found to export.');
+      return;
+    }
+
+    const reportRows = saturdayRecords.map(r => ({
+      'Date': r.date,
+      'Session Day': 'Saturday',
+      'Student Roll No': students.find(s => s.id === r.studentId)?.rollNo || r.studentId,
+      'Student Name': r.studentName || students.find(s => s.id === r.studentId)?.name || 'Student',
+      'Subject Code': currentSubject?.code || 'CS401',
+      'Subject Name': r.subjectName,
+      'Type': r.subjectType,
+      'Weight': r.subjectType === 'Practical' ? '3x (Lab)' : '1x (Lecture)',
+      'Status': r.status.toUpperCase(),
+      'Marked By': faculty.name
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(reportRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Saturday Attendance');
+    XLSX.writeFile(wb, `Saturday_Attendance_${faculty.name.replace(/\s+/g, '_')}.xlsx`);
   };
 
   if (activeTab === 'qr_gen') {
     return <QRGenerator faculty={faculty} subjects={subjects} timetable={timetable} />;
   }
 
-  if (activeTab === 'mark' || activeTab === 'dashboard') {
-    return (
-      <div className="space-y-4 max-w-4xl mx-auto animate-fade-in">
+  return (
+    <div className="space-y-4 max-w-5xl mx-auto animate-fade-in pb-12">
+      
+      {/* Class Selector Header */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
         
-        {/* Class Selector Header */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-xl">
-                <CheckSquare className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold font-heading text-slate-900 dark:text-white">
-                  Mark Class Attendance
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {faculty.name} ({faculty.designation})
-                </p>
-              </div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl border border-amber-500/20">
+              <CheckSquare className="w-6 h-6" />
             </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Faculty Portal - Attendance Roster
+              </h3>
+              <p className="text-xs text-slate-500">
+                {faculty.name} ({faculty.designation}) • {faculty.department}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportSaturdayReport}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-all"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Download Saturday CSV/Excel
+            </button>
 
             <button
               onClick={() => onTabChange('qr_gen')}
-              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
+              className="px-3.5 py-2 bg-gradient-to-r from-red-900 to-amber-600 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
             >
               <QrCode className="w-4 h-4" />
-              Generate Live Class QR
+              Generate Class QR Code
             </button>
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Select Course / Subject
-              </label>
-              <select
-                value={selectedSubjectId}
-                onChange={e => setSelectedSubjectId(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                {facultySubjects.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.code} - {s.name} ({s.type})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Attendance Date
-              </label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={e => setSelectedDate(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-
-          {currentSubject && (
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-900 dark:text-amber-300 flex items-center justify-between">
-              <span className="font-semibold">
-                Class Type: <span className="font-bold">{currentSubject.type}</span> ({currentSubject.type === 'Practical' ? '3x Weight per student' : '1x Weight'})
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleBulkMark('present')}
-                  className="px-2 py-1 bg-emerald-600 text-white font-bold text-[10px] rounded-lg shadow-2xs"
-                >
-                  All Present
-                </button>
-                <button
-                  onClick={() => handleBulkMark('absent')}
-                  className="px-2 py-1 bg-rose-600 text-white font-bold text-[10px] rounded-lg shadow-2xs"
-                >
-                  All Absent
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Success Banner */}
-        {saveSuccessMsg && (
-          <div className="p-3 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 rounded-xl text-xs font-bold animate-fade-in">
-            {saveSuccessMsg}
+        {/* Date and Subject Selectors */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+              Select Course / Subject
+            </label>
+            <select
+              value={selectedSubjectId}
+              onChange={e => setSelectedSubjectId(e.target.value)}
+              className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
+            >
+              {facultySubjects.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.code} - {s.name} ({s.type})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+              Attendance Session Date
+            </label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+              className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
+        </div>
+
+        {/* Saturday Banner if date selected is Saturday */}
+        {isSaturdaySession && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-600 dark:text-amber-400 text-xs flex items-center justify-between">
+            <span className="font-bold flex items-center gap-1.5">
+              <Calendar className="w-4 h-4" />
+              Saturday Session Active (Following {saturdayConfig.mappedDay}'s Timetable)
+            </span>
+            <span className="text-[10px] bg-amber-500 text-slate-950 px-2 py-0.5 rounded font-bold uppercase">
+              Saturday Class
+            </span>
           </div>
         )}
 
-        {/* Student Attendance Marking Roster */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-            <h4 className="text-sm font-bold font-heading text-slate-900 dark:text-white flex items-center gap-2">
-              <Users className="w-4 h-4 text-indigo-500" />
-              Student Roster ({students.length} Enrolled)
-            </h4>
-
-            <button
-              onClick={handleSaveAttendance}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
-            >
-              <Save className="w-4 h-4" />
-              Save Attendance
-            </button>
+        {currentSubject && (
+          <div className="p-3 bg-slate-100 dark:bg-slate-800/60 rounded-xl text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between">
+            <span className="font-semibold">
+              Subject Weight: <strong className="text-amber-600 dark:text-amber-400">{currentSubject.type}</strong> ({currentSubject.type === 'Practical' ? '3x Weight (Lab)' : '1x Weight (Lecture)'})
+            </span>
+            <div className="flex gap-2">
+              <button onClick={() => handleBulkMark('present')} className="px-2.5 py-1 bg-emerald-600 text-white font-bold text-[10px] rounded-lg">Mark All Present</button>
+              <button onClick={() => handleBulkMark('absent')} className="px-2.5 py-1 bg-rose-600 text-white font-bold text-[10px] rounded-lg">Mark All Absent</button>
+            </div>
           </div>
-
-          <div className="space-y-2">
-            {students.map(st => {
-              const currentStatus = attendanceMap[st.id] || 'present';
-              return (
-                <div
-                  key={st.id}
-                  className="p-3 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2"
-                >
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={st.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
-                      alt={st.name}
-                      className="w-8 h-8 rounded-full object-cover"
-                    />
-                    <div>
-                      <h5 className="text-xs font-bold text-slate-900 dark:text-white">
-                        {st.name}
-                      </h5>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                        {st.rollNo} • Sem {st.semester} ({st.section})
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* 1-Tap Status Selector Pill Group */}
-                  <div className="flex items-center gap-1 w-full sm:w-auto">
-                    {(['present', 'absent', 'late', 'excused'] as AttendanceStatus[]).map(stt => (
-                      <button
-                        key={stt}
-                        onClick={() => handleStatusToggle(st.id, stt)}
-                        className={`flex-1 sm:flex-initial px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all ${
-                          currentStatus === stt
-                            ? stt === 'present'
-                              ? 'bg-emerald-600 text-white shadow-xs'
-                              : stt === 'absent'
-                              ? 'bg-rose-600 text-white shadow-xs'
-                              : stt === 'late'
-                              ? 'bg-amber-500 text-white shadow-xs'
-                              : 'bg-indigo-600 text-white shadow-xs'
-                            : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                        }`}
-                      >
-                        {stt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="pt-2 flex justify-end">
-            <button
-              onClick={handleSaveAttendance}
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
-            >
-              <Save className="w-4 h-4" />
-              Save Attendance Roster
-            </button>
-          </div>
-        </div>
+        )}
 
       </div>
-    );
-  }
 
-  return null;
+      {saveSuccessMsg && (
+        <div className="p-3 bg-emerald-950/60 border border-emerald-700 text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <span>{saveSuccessMsg}</span>
+        </div>
+      )}
+
+      {/* Student Roster List */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+          <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Users className="w-4 h-4 text-amber-500" />
+            Class Student Roster ({students.length} Enrolled)
+          </h4>
+
+          <button
+            onClick={handleSaveAttendance}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
+          >
+            <Save className="w-4 h-4" />
+            Save Attendance
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {students.map(st => {
+            const currentStatus = attendanceMap[st.id] || 'present';
+            // Compute student's Saturday attendance stats
+            const studentSatRecs = allAttendance.filter(r => r.studentId === st.id && (r.isSaturday || new Date(r.date).getDay() === 6));
+            const satPresentCount = studentSatRecs.filter(r => r.status === 'present' || r.status === 'late').length;
+            const satPct = studentSatRecs.length > 0 ? Math.round((satPresentCount / studentSatRecs.length) * 100) : 100;
+
+            return (
+              <div
+                key={st.id}
+                className="p-3 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-600 font-bold flex items-center justify-center text-xs">
+                    {st.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900 dark:text-white">{st.name}</h5>
+                    <p className="text-[10px] text-slate-500 font-mono">
+                      {st.rollNo} • Sem {st.semester} ({st.section}) • Sat Attendance: <strong className="text-amber-500">{satPct}%</strong>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 w-full sm:w-auto">
+                  {(['present', 'absent', 'late', 'excused'] as AttendanceStatus[]).map(stt => (
+                    <button
+                      key={stt}
+                      onClick={() => handleStatusToggle(st.id, stt)}
+                      className={`flex-1 sm:flex-initial px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                        currentStatus === stt
+                          ? stt === 'present'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : stt === 'absent'
+                            ? 'bg-rose-600 text-white shadow-sm'
+                            : stt === 'late'
+                            ? 'bg-amber-500 text-slate-950 shadow-sm'
+                            : 'bg-indigo-600 text-white shadow-sm'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      {stt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="pt-2 flex justify-end">
+          <button
+            onClick={handleSaveAttendance}
+            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
+          >
+            <Save className="w-4 h-4" />
+            Save Class Attendance
+          </button>
+        </div>
+      </div>
+
+    </div>
+  );
 };

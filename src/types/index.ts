@@ -4,6 +4,8 @@ export type SubjectType = 'Lecture' | 'Practical'; // Practical weight = 3 x Lec
 
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused' | 'holiday';
 
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
 export interface User {
   id: string;
   name: string;
@@ -12,7 +14,7 @@ export interface User {
   avatar?: string;
   phone?: string;
   department?: string;
-  // Specific role IDs
+  approvalStatus?: ApprovalStatus;
   studentId?: string; // e.g. "CS202401"
   facultyId?: string; // e.g. "FAC102"
   parentId?: string;  // e.g. "PAR301"
@@ -25,12 +27,15 @@ export interface Student {
   name: string;
   email: string;
   department: string;
+  year: string; // "1st Year", "2nd Year", "3rd Year", "4th Year"
   semester: number;
   section: string;
   parentId?: string;
   parentName?: string;
   parentPhone?: string;
   avatar?: string;
+  approvalStatus: ApprovalStatus;
+  createdAt?: string;
 }
 
 export interface Faculty {
@@ -42,6 +47,8 @@ export interface Faculty {
   designation: string;
   phone: string;
   subjectsHandled: string[]; // Subject IDs
+  approvalStatus: ApprovalStatus;
+  createdAt?: string;
 }
 
 export interface Subject {
@@ -70,6 +77,14 @@ export interface TimetableSlot {
   department: string;
   semester: number;
   section: string;
+  isSaturdayMapped?: boolean;
+}
+
+export interface SaturdayConfig {
+  mappedDay: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday';
+  enabled: boolean;
+  lastUpdatedBy?: string;
+  updatedAt?: string;
 }
 
 export interface AttendanceRecord {
@@ -86,6 +101,7 @@ export interface AttendanceRecord {
   markedAt: string; // ISO String
   method: 'manual' | 'qr_code' | 'bulk';
   notes?: string;
+  isSaturday?: boolean;
 }
 
 export interface LeaveRequest {
@@ -129,6 +145,27 @@ export interface QRSession {
   expiresAt: string;
   roomNo: string;
   active: boolean;
+  isSaturday?: boolean;
+}
+
+export interface RegistrationRequest {
+  id: string;
+  role: 'student' | 'faculty';
+  name: string;
+  email: string;
+  rollNo?: string;
+  facultyCode?: string;
+  department: string;
+  year?: string;
+  semester?: number;
+  section?: string;
+  designation?: string;
+  phone?: string;
+  parentName?: string;
+  parentPhone?: string;
+  status: ApprovalStatus;
+  submittedAt: string;
+  verifiedEmail: boolean;
 }
 
 export interface AttendanceSummary {
