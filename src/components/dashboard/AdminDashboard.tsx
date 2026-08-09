@@ -406,7 +406,7 @@ export const AdminDashboard: React.FC<Props> = ({
 
           </div>
 
-          {/* Attendance Shortage Filter Banner & Export Control */}
+          {/* Attendance Shortage Filter Banner & Directory Tabs Control */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <button
@@ -425,7 +425,7 @@ export const AdminDashboard: React.FC<Props> = ({
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search students..."
+                  placeholder="Search directory..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none"
@@ -452,12 +452,17 @@ export const AdminDashboard: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Student Roster Table with Shortage Alert Badges */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
-            <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Users className="w-4 h-4 text-amber-500" />
-              Student Directory & Attendance Performance
-            </h4>
+          {/* Directory Tabs & Roster Section */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-4">
+            
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Users className="w-4 h-4 text-amber-500" />
+                System Directory & Roster
+              </h4>
+            </div>
+
+            {/* Student Directory Table */}
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase font-bold border-b border-slate-200 dark:border-slate-800">
