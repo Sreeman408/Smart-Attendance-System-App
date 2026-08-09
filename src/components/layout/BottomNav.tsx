@@ -58,12 +58,11 @@ export const BottomNav: React.FC<Props> = ({
 
       case 'admin':
         return [
-          { id: 'dashboard', label: 'Analytics', icon: LayoutDashboard },
-          { id: 'directory', label: 'Directory', icon: Users },
+          { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
           { id: 'crud', label: 'Management', icon: Settings },
           { id: 'approvals', label: 'Approvals', icon: Shield, badge: pendingApprovalsCount > 0 ? `${pendingApprovalsCount}` : undefined },
           { id: 'timetable', label: 'Timetable', icon: Clock },
-          { id: 'saturday', label: 'Saturday', icon: Settings },
+          { id: 'saturday', label: 'Saturday', icon: Calendar },
           { id: 'bulk', label: 'Bulk Upload', icon: Upload }
         ];
     }

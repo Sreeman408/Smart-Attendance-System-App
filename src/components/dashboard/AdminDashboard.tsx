@@ -282,7 +282,7 @@ export const AdminDashboard: React.FC<Props> = ({
           }`}
         >
           <PieChartIcon className="w-4 h-4" />
-          Analytics & Overview
+          Overview (Analytics & Directory)
         </button>
 
         <button

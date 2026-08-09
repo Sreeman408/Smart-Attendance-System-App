@@ -4,8 +4,10 @@ import { Sun, Moon } from 'lucide-react';
 export const ThemeToggle: React.FC = () => {
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark') ||
-        localStorage.getItem('academia_theme') === 'dark';
+      const stored = localStorage.getItem('academia_theme');
+      if (stored === 'dark') return true;
+      if (stored === 'light') return false;
+      return document.documentElement.classList.contains('dark');
     }
     return false;
   });
