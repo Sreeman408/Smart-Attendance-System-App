@@ -48,6 +48,7 @@ export const AdminDashboard: React.FC<Props> = ({
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterShortageOnly, setFilterShortageOnly] = useState(false);
+  const [directoryTab, setDirectoryTab] = useState<'students' | 'faculty' | 'parents' | 'subjects'>('students');
 
   // DB Extra entities
   const [parents, setParents] = useState<ParentRecord[]>([]);
@@ -455,56 +456,164 @@ export const AdminDashboard: React.FC<Props> = ({
           {/* Directory Tabs & Roster Section */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-4">
             
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
               <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Users className="w-4 h-4 text-amber-500" />
-                System Directory & Roster
+                System Directory
               </h4>
+
+              {/* Directory Entity Sub-Tabs */}
+              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                {(['students', 'faculty', 'parents', 'subjects'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setDirectoryTab(tab)}
+                    className={`px-3 py-1 text-xs font-bold capitalize rounded-lg transition-all ${
+                      directoryTab === tab
+                        ? 'bg-amber-500 text-slate-950 shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Student Directory Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase font-bold border-b border-slate-200 dark:border-slate-800">
-                  <tr>
-                    <th className="p-3">Roll No</th>
-                    <th className="p-3">Name</th>
-                    <th className="p-3">Department</th>
-                    <th className="p-3">Year / Sem</th>
-                    <th className="p-3">Attendance %</th>
-                    <th className="p-3 text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {studentStats
-                    .filter(s => {
-                      if (filterShortageOnly && s.summary.percentage >= 75) return false;
-                      if (searchQuery && !s.student.name.toLowerCase().includes(searchQuery.toLowerCase()) && !s.student.rollNo.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-                      return true;
-                    })
-                    .map(({ student: st, summary }) => (
-                      <tr key={st.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                        <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{st.rollNo}</td>
-                        <td className="p-3 font-bold text-slate-900 dark:text-white">{st.name}</td>
-                        <td className="p-3 text-slate-500">{st.department}</td>
-                        <td className="p-3 font-semibold">{st.year || '2nd Year'} (Sem {st.semester})</td>
-                        <td className="p-3 font-extrabold">{summary.percentage}%</td>
-                        <td className="p-3 text-right">
-                          <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full ${
-                            summary.percentage < 75
-                              ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-rose-800'
-                              : summary.percentage < 85
-                              ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
-                              : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800'
-                          }`}>
-                            {summary.status === 'Shortage' ? '🚨 Shortage Risk' : summary.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
+            {/* 1. Student Directory Table */}
+            {directoryTab === 'students' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase font-bold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3">Roll No</th>
+                      <th className="p-3">Name</th>
+                      <th className="p-3">Department</th>
+                      <th className="p-3">Year / Sem</th>
+                      <th className="p-3">Attendance %</th>
+                      <th className="p-3 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {studentStats
+                      .filter(s => {
+                        if (filterShortageOnly && s.summary.percentage >= 75) return false;
+                        if (searchQuery && !s.student.name.toLowerCase().includes(searchQuery.toLowerCase()) && !s.student.rollNo.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                        return true;
+                      })
+                      .map(({ student: st, summary }) => (
+                        <tr key={st.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{st.rollNo}</td>
+                          <td className="p-3 font-bold text-slate-900 dark:text-white">{st.name}</td>
+                          <td className="p-3 text-slate-500">{st.department}</td>
+                          <td className="p-3 font-semibold">{st.year || '2nd Year'} (Sem {st.semester})</td>
+                          <td className="p-3 font-extrabold">{summary.percentage}%</td>
+                          <td className="p-3 text-right">
+                            <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full ${
+                              summary.percentage < 75
+                                ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-rose-800'
+                                : summary.percentage < 85
+                                ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
+                                : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800'
+                            }`}>
+                              {summary.status === 'Shortage' ? '🚨 Shortage Risk' : summary.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* 2. Faculty Directory Table */}
+            {directoryTab === 'faculty' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase font-bold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3">Faculty Code</th>
+                      <th className="p-3">Name</th>
+                      <th className="p-3">Department</th>
+                      <th className="p-3">Designation</th>
+                      <th className="p-3 text-right">Phone / Email</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {faculty
+                      .filter(f => !searchQuery || f.name.toLowerCase().includes(searchQuery.toLowerCase()) || f.facultyCode.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map(f => (
+                        <tr key={f.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{f.facultyCode}</td>
+                          <td className="p-3 font-bold text-slate-900 dark:text-white">{f.name}</td>
+                          <td className="p-3 text-slate-500">{f.department}</td>
+                          <td className="p-3 font-semibold">{f.designation}</td>
+                          <td className="p-3 text-right text-slate-500 font-mono">{f.phone || f.email}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* 3. Parents Directory Table */}
+            {directoryTab === 'parents' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase font-bold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3">Child Roll No</th>
+                      <th className="p-3">Parent Name</th>
+                      <th className="p-3">Email</th>
+                      <th className="p-3 text-right">Phone Number</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {parents
+                      .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.childRollNo.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map(p => (
+                        <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="p-3 font-mono font-bold text-amber-600 dark:text-amber-400">{p.childRollNo}</td>
+                          <td className="p-3 font-bold text-slate-900 dark:text-white">{p.name}</td>
+                          <td className="p-3 text-slate-500">{p.email}</td>
+                          <td className="p-3 text-right font-mono font-semibold">{p.phone}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* 4. Subjects Directory Table */}
+            {directoryTab === 'subjects' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase font-bold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3">Subject Code</th>
+                      <th className="p-3">Subject Name</th>
+                      <th className="p-3">Type</th>
+                      <th className="p-3">Credits</th>
+                      <th className="p-3 text-right">Assigned Faculty</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {subjects
+                      .filter(s => !searchQuery || s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.code.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map(s => (
+                        <tr key={s.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{s.code}</td>
+                          <td className="p-3 font-bold text-slate-900 dark:text-white">{s.name}</td>
+                          <td className="p-3 font-semibold">{s.type}</td>
+                          <td className="p-3 text-slate-500">{s.credits} Credits</td>
+                          <td className="p-3 text-right font-semibold text-amber-600 dark:text-amber-400">{s.facultyName || 'Prof. Robert Langdon'}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
           </div>
 
         </div>
