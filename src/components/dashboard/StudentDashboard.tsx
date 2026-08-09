@@ -3,8 +3,11 @@ import { Student, Subject, AttendanceRecord, TimetableSlot, SaturdayConfig } fro
 import { AttendanceCalendar } from '../calendar/AttendanceCalendar';
 import { QRScanner } from '../qr/QRScanner';
 import { LeaveManager } from '../leaves/LeaveManager';
-import { Clock, BookOpen, MapPin, Sparkles, Calendar, AlertCircle } from 'lucide-react';
+import { ShortageAlertBanner } from '../common/ShortageAlertBanner';
+import { Clock, BookOpen, MapPin, Sparkles, Calendar, PieChart as PieChartIcon, BarChart2 } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import { fetchSaturdayConfigFromDB } from '../../services/dbService';
+import { calculateOverallAttendance } from '../../utils/attendance';
 
 interface Props {
   student: Student;
@@ -32,6 +35,28 @@ export const StudentDashboard: React.FC<Props> = ({
     }
     loadConfig();
   }, []);
+
+  const studentAtts = attendanceRecords.filter(a => a.studentId === student.id);
+  const summary = calculateOverallAttendance(studentAtts, subjects);
+
+  // Subject-wise chart data
+  const subjectChartData = subjects.map(sub => {
+    const subAtts = studentAtts.filter(a => a.subjectId === sub.id);
+    const presentCount = subAtts.filter(a => a.status === 'present').length;
+    const totalCount = subAtts.length || 1;
+    const pct = Math.round((presentCount / totalCount) * 100);
+    return {
+      name: sub.code,
+      fullName: sub.name,
+      percentage: pct,
+      type: sub.type
+    };
+  });
+
+  const overallPieData = [
+    { name: 'Attended Units', value: summary.totalAttendedUnits, color: '#10b981' },
+    { name: 'Missed Units', value: Math.max(0, summary.totalConductedUnits - summary.totalAttendedUnits), color: '#f43f5e' }
+  ];
 
   if (activeTab === 'calendar') {
     return (
@@ -69,7 +94,6 @@ export const StudentDashboard: React.FC<Props> = ({
   }
 
   if (activeTab === 'timetable') {
-    // Generate Timetable incorporating Saturday mapped schedule
     const saturdaySlots: TimetableSlot[] = saturdayConfig.enabled ? timetable
       .filter(t => t.dayOfWeek === saturdayConfig.mappedDay)
       .map((t, idx) => ({
@@ -91,7 +115,7 @@ export const StudentDashboard: React.FC<Props> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Weekly Timetable & Saturday Mapping
+                Weekly Timetable & Saturday Schedule
               </h3>
               <p className="text-xs text-slate-500">
                 Department: {student.department} • Year: {student.year || '2nd Year'} • Sem {student.semester} ({student.section})
@@ -99,12 +123,11 @@ export const StudentDashboard: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Saturday Mapping Alert Banner */}
           {saturdayConfig.enabled && (
             <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-700 dark:text-amber-300 text-xs flex items-center justify-between">
               <div className="flex items-center gap-2 font-bold">
                 <Calendar className="w-4 h-4 text-amber-500 shrink-0" />
-                <span>Saturday Class Schedule copies <strong>{saturdayConfig.mappedDay}'s</strong> Timetable.</span>
+                <span>Saturday Class copies <strong>{saturdayConfig.mappedDay}'s</strong> timetable slots.</span>
               </div>
               <span className="px-2 py-0.5 bg-amber-500 text-slate-950 font-extrabold rounded text-[10px] uppercase">
                 Active Mapping
@@ -146,11 +169,6 @@ export const StudentDashboard: React.FC<Props> = ({
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                     Faculty: {slot.facultyName} • Room: {slot.roomNo}
                   </p>
-                  {slot.isSaturdayMapped && (
-                    <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 mt-1">
-                      * Saturday Class (Copied from {saturdayConfig.mappedDay})
-                    </p>
-                  )}
                 </div>
               </div>
             ))}
@@ -189,7 +207,57 @@ export const StudentDashboard: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Embedded Calendar Analytics View */}
+      {/* Attendance Shortage Warning Banner */}
+      <ShortageAlertBanner summary={summary} studentName={student.name} />
+
+      {/* Recharts Analytics for Student */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        {/* Overall Percentage Donut Chart */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-3">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <PieChartIcon className="w-4 h-4 text-amber-500" />
+            Overall Weighted Attendance Breakdown
+          </h3>
+          <div className="h-56 w-full relative flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={overallPieData} cx="50%" cy="50%" innerRadius={55} outerRadius={75} paddingAngle={4} dataKey="value">
+                  {overallPieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(val) => [`${val} Units`, 'Value']} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-2xl font-black text-slate-900 dark:text-white">{summary.percentage}%</span>
+              <span className="text-[10px] text-slate-400 font-bold uppercase">Overall</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Subject-Wise Attendance Bar Chart */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-3">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <BarChart2 className="w-4 h-4 text-amber-500" />
+            Subject-Wise Attendance (%)
+          </h3>
+          <div className="h-56 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={subjectChartData}>
+                <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
+                <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
+                <Tooltip formatter={(val) => [`${val}%`, 'Attendance']} />
+                <Bar dataKey="percentage" fill="#d97706" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Embedded Calendar View */}
       <AttendanceCalendar
         student={student}
         subjects={subjects}

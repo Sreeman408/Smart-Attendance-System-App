@@ -181,3 +181,21 @@ export interface AttendanceSummary {
   excusedCount: number;
   streakDays: number;
 }
+
+export interface ParentRecord {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  childRollNo: string;
+  childName?: string;
+  createdAt?: string;
+}
+
+export interface Department {
+  id: string;
+  code: string;
+  name: string;
+  hodName?: string;
+}
+

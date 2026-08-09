@@ -1,11 +1,13 @@
 import { getSupabaseClient } from './supabaseClient';
 import {
   Student, Faculty, Subject, TimetableSlot, AttendanceRecord,
-  LeaveRequest, AuditLog, SaturdayConfig, RegistrationRequest, ApprovalStatus
+  LeaveRequest, AuditLog, SaturdayConfig, RegistrationRequest, ApprovalStatus,
+  ParentRecord, Department
 } from '../types';
 import {
   INITIAL_STUDENTS, INITIAL_FACULTY, INITIAL_SUBJECTS,
-  INITIAL_TIMETABLE, generateSeedAttendance, INITIAL_LEAVES, INITIAL_AUDIT_LOGS
+  INITIAL_TIMETABLE, generateSeedAttendance, INITIAL_LEAVES, INITIAL_AUDIT_LOGS,
+  INITIAL_PARENTS, INITIAL_DEPARTMENTS
 } from '../data/initialData';
 import { Preferences } from '@capacitor/preferences';
 
@@ -19,7 +21,9 @@ const PREF_KEYS = {
   LEAVES: 'au_cms_leaves',
   LOGS: 'au_cms_logs',
   SATURDAY_CONFIG: 'au_cms_saturday_config',
-  REGISTRATIONS: 'au_cms_registrations'
+  REGISTRATIONS: 'au_cms_registrations',
+  PARENTS: 'au_cms_parents',
+  DEPARTMENTS: 'au_cms_departments'
 };
 
 // Helper for native Preferences caching
@@ -678,3 +682,193 @@ export async function addAuditLogDB(userId: string, userName: string, userRole: 
   cached.unshift(newLog);
   await setCachedData(PREF_KEYS.LOGS, cached.slice(0, 100));
 }
+
+// -------------------------------------------------------------
+// 10. DELETION SERVICES
+// -------------------------------------------------------------
+export async function deleteStudentFromDB(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('students').delete().eq('id', id);
+    } catch (e) {
+      console.error('Delete student error:', e);
+    }
+  }
+  const cached = await getCachedData<Student[]>(PREF_KEYS.STUDENTS, []);
+  const updated = cached.filter(s => s.id !== id);
+  await setCachedData(PREF_KEYS.STUDENTS, updated);
+  return true;
+}
+
+export async function deleteFacultyFromDB(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('faculty').delete().eq('id', id);
+    } catch (e) {
+      console.error('Delete faculty error:', e);
+    }
+  }
+  const cached = await getCachedData<Faculty[]>(PREF_KEYS.FACULTY, []);
+  const updated = cached.filter(f => f.id !== id);
+  await setCachedData(PREF_KEYS.FACULTY, updated);
+  return true;
+}
+
+export async function deleteSubjectFromDB(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('subjects').delete().eq('id', id);
+    } catch (e) {
+      console.error('Delete subject error:', e);
+    }
+  }
+  const cached = await getCachedData<Subject[]>(PREF_KEYS.SUBJECTS, []);
+  const updated = cached.filter(s => s.id !== id);
+  await setCachedData(PREF_KEYS.SUBJECTS, updated);
+  return true;
+}
+
+export async function deleteTimetableSlotFromDB(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('timetable').delete().eq('id', id);
+    } catch (e) {
+      console.error('Delete timetable slot error:', e);
+    }
+  }
+  const cached = await getCachedData<TimetableSlot[]>(PREF_KEYS.TIMETABLE, []);
+  const updated = cached.filter(t => t.id !== id);
+  await setCachedData(PREF_KEYS.TIMETABLE, updated);
+  return true;
+}
+
+// -------------------------------------------------------------
+// 11. PARENTS & DEPARTMENTS SERVICES
+// -------------------------------------------------------------
+export async function fetchParentsFromDB(): Promise<ParentRecord[]> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('parents').select('*').order('name');
+      if (!error && data && data.length > 0) {
+        const mapped: ParentRecord[] = data.map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          email: d.email,
+          phone: d.phone,
+          childRollNo: d.child_roll_no || d.childRollNo || '',
+          childName: d.child_name || d.childName,
+          createdAt: d.created_at || d.createdAt
+        }));
+        await setCachedData(PREF_KEYS.PARENTS, mapped);
+        return mapped;
+      }
+    } catch (e) {
+      console.warn('Fetch parents error:', e);
+    }
+  }
+  return getCachedData<ParentRecord[]>(PREF_KEYS.PARENTS, INITIAL_PARENTS);
+}
+
+export async function saveParentToDB(parent: ParentRecord): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('parents').upsert({
+        id: parent.id,
+        name: parent.name,
+        email: parent.email,
+        phone: parent.phone,
+        child_roll_no: parent.childRollNo,
+        child_name: parent.childName
+      });
+    } catch (e) {
+      console.error('Save parent error:', e);
+    }
+  }
+  const cached = await getCachedData<ParentRecord[]>(PREF_KEYS.PARENTS, []);
+  const idx = cached.findIndex(p => p.id === parent.id);
+  if (idx >= 0) cached[idx] = parent;
+  else cached.unshift(parent);
+  await setCachedData(PREF_KEYS.PARENTS, cached);
+  return true;
+}
+
+export async function deleteParentFromDB(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('parents').delete().eq('id', id);
+    } catch (e) {
+      console.error('Delete parent error:', e);
+    }
+  }
+  const cached = await getCachedData<ParentRecord[]>(PREF_KEYS.PARENTS, []);
+  const updated = cached.filter(p => p.id !== id);
+  await setCachedData(PREF_KEYS.PARENTS, updated);
+  return true;
+}
+
+export async function fetchDepartmentsFromDB(): Promise<Department[]> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('departments').select('*').order('name');
+      if (!error && data && data.length > 0) {
+        const mapped: Department[] = data.map((d: any) => ({
+          id: d.id,
+          code: d.code,
+          name: d.name,
+          hodName: d.hod_name || d.hodName
+        }));
+        await setCachedData(PREF_KEYS.DEPARTMENTS, mapped);
+        return mapped;
+      }
+    } catch (e) {
+      console.warn('Fetch departments error:', e);
+    }
+  }
+  return getCachedData<Department[]>(PREF_KEYS.DEPARTMENTS, INITIAL_DEPARTMENTS);
+}
+
+export async function saveDepartmentToDB(dept: Department): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('departments').upsert({
+        id: dept.id,
+        code: dept.code,
+        name: dept.name,
+        hod_name: dept.hodName
+      });
+    } catch (e) {
+      console.error('Save department error:', e);
+    }
+  }
+  const cached = await getCachedData<Department[]>(PREF_KEYS.DEPARTMENTS, []);
+  const idx = cached.findIndex(d => d.id === dept.id);
+  if (idx >= 0) cached[idx] = dept;
+  else cached.unshift(dept);
+  await setCachedData(PREF_KEYS.DEPARTMENTS, cached);
+  return true;
+}
+
+export async function deleteDepartmentFromDB(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('departments').delete().eq('id', id);
+    } catch (e) {
+      console.error('Delete department error:', e);
+    }
+  }
+  const cached = await getCachedData<Department[]>(PREF_KEYS.DEPARTMENTS, []);
+  const updated = cached.filter(d => d.id !== id);
+  await setCachedData(PREF_KEYS.DEPARTMENTS, updated);
+  return true;
+}
+

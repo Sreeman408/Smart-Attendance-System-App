@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Role, User, Student, Faculty, Subject, TimetableSlot, AttendanceRecord, LeaveRequest } from './types';
+import { Role, User, Student, Faculty, Subject, TimetableSlot, AttendanceRecord, LeaveRequest, RegistrationRequest } from './types';
 import { getStoredActiveSession, clearActiveSession } from './services/authService';
 import {
   fetchStudentsFromDB, fetchFacultyFromDB, fetchSubjectsFromDB,
-  fetchTimetableFromDB, fetchAttendanceRecordsFromDB, fetchLeavesFromDB
+  fetchTimetableFromDB, fetchAttendanceRecordsFromDB, fetchLeavesFromDB,
+  fetchRegistrationRequestsFromDB
 } from './services/dbService';
 import { LoginGateway } from './components/auth/LoginGateway';
 import { Header } from './components/layout/Header';
@@ -12,11 +13,12 @@ import { StudentDashboard } from './components/dashboard/StudentDashboard';
 import { FacultyDashboard } from './components/dashboard/FacultyDashboard';
 import { ParentDashboard } from './components/dashboard/ParentDashboard';
 import { AdminDashboard } from './components/dashboard/AdminDashboard';
+import { ShieldAlert } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeRole, setActiveRole] = useState<Role>('student');
-  const [activeTab, setActiveTab] = useState<string>('calendar');
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [loadingSession, setLoadingSession] = useState(true);
 
   // DB States
@@ -26,6 +28,7 @@ export default function App() {
   const [timetable, setTimetable] = useState<TimetableSlot[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
+  const [registrations, setRegistrations] = useState<RegistrationRequest[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string>('STU202401');
 
   // Load session & DB data on mount
@@ -51,6 +54,7 @@ export default function App() {
     const tt = await fetchTimetableFromDB();
     const atts = await fetchAttendanceRecordsFromDB();
     const lvs = await fetchLeavesFromDB();
+    const regs = await fetchRegistrationRequestsFromDB();
 
     setStudents(stus);
     setFaculty(facs);
@@ -58,14 +62,15 @@ export default function App() {
     setTimetable(tt);
     setAttendanceRecords(atts);
     setLeaves(lvs);
+    setRegistrations(regs);
     if (stus.length > 0) setSelectedChildId(stus[0].id);
   };
 
   const setDefaultTabForRole = (role: Role) => {
     switch (role) {
-      case 'student': setActiveTab('calendar'); break;
+      case 'student': setActiveTab('dashboard'); break;
       case 'faculty': setActiveTab('dashboard'); break;
-      case 'parent': setActiveTab('calendar'); break;
+      case 'parent': setActiveTab('dashboard'); break;
       case 'admin': setActiveTab('dashboard'); break;
     }
   };
@@ -82,13 +87,15 @@ export default function App() {
   };
 
   const handleRoleChange = (newRole: Role) => {
+    // Lock role strictly to assigned user role unless user is Admin
+    if (currentUser?.role !== 'admin') return;
     setActiveRole(newRole);
     setDefaultTabForRole(newRole);
   };
 
   if (loadingSession) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center space-y-4">
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center space-y-4 font-sans">
         <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
         <p className="text-sm font-bold tracking-wider text-amber-400">Loading Annamalai University CMS...</p>
       </div>
@@ -103,13 +110,17 @@ export default function App() {
   const currentStudent = students.find(s => s.id === (currentUser.studentId || 'STU202401')) || students[0];
   const currentFaculty = faculty.find(f => f.id === (currentUser.facultyId || 'FAC101')) || faculty[0];
   const pendingLeavesCount = leaves.filter(l => l.status === 'pending').length;
+  const pendingApprovalsCount = registrations.filter(r => r.status === 'pending').length;
+
+  // Security Check: If non-admin user somehow gets mismatched activeRole, force back to currentUser.role
+  const effectiveRole = currentUser.role === 'admin' ? activeRole : currentUser.role;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors selection:bg-amber-500 selection:text-slate-950">
       
       {/* App Header Bar */}
       <Header
-        activeRole={activeRole}
+        activeRole={effectiveRole}
         onRoleChange={handleRoleChange}
         currentUser={currentUser}
         onUserUpdated={setCurrentUser}
@@ -124,16 +135,17 @@ export default function App() {
         
         {/* Navigation (Bottom Bar on Mobile, Sidebar on Desktop) */}
         <BottomNav
-          activeRole={activeRole}
+          activeRole={effectiveRole}
           activeTab={activeTab}
           onTabChange={setActiveTab}
           pendingLeavesCount={pendingLeavesCount}
+          pendingApprovalsCount={pendingApprovalsCount}
         />
 
         {/* Primary Content View */}
         <main className="flex-1 p-3 sm:p-6 overflow-y-auto">
           
-          {activeRole === 'student' && currentStudent && (
+          {effectiveRole === 'student' && currentStudent && (
             <StudentDashboard
               student={currentStudent}
               subjects={subjects}
@@ -144,7 +156,7 @@ export default function App() {
             />
           )}
 
-          {activeRole === 'faculty' && currentFaculty && (
+          {effectiveRole === 'faculty' && currentFaculty && (
             <FacultyDashboard
               faculty={currentFaculty}
               subjects={subjects}
@@ -155,7 +167,7 @@ export default function App() {
             />
           )}
 
-          {activeRole === 'parent' && (
+          {effectiveRole === 'parent' && (
             <ParentDashboard
               parentUser={currentUser}
               students={students}
@@ -168,7 +180,7 @@ export default function App() {
             />
           )}
 
-          {activeRole === 'admin' && (
+          {effectiveRole === 'admin' && (
             <AdminDashboard
               students={students}
               faculty={faculty}

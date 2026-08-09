@@ -181,3 +181,55 @@ export function exportToCSV(filename: string, rows: object[]): void {
     document.body.removeChild(link);
   }
 }
+
+export function calculateOverallAttendance(
+  records: AttendanceRecord[],
+  subjects?: Subject[]
+): AttendanceSummary {
+  let totalConductedUnits = 0;
+  let totalAttendedUnits = 0;
+  let presentsCount = 0;
+  let absentsCount = 0;
+  let latesCount = 0;
+  let excusedCount = 0;
+
+  records.forEach(r => {
+    const weight = r.subjectType === 'Practical' ? 3 : 1;
+    if (r.status !== 'holiday') totalConductedUnits += weight;
+    if (r.status === 'present') {
+      totalAttendedUnits += weight;
+      presentsCount++;
+    } else if (r.status === 'late') {
+      totalAttendedUnits += weight * 0.75;
+      latesCount++;
+    } else if (r.status === 'excused') {
+      totalAttendedUnits += weight;
+      excusedCount++;
+    } else if (r.status === 'absent') {
+      absentsCount++;
+    }
+  });
+
+  const percentage = totalConductedUnits > 0
+    ? Math.round((totalAttendedUnits / totalConductedUnits) * 100)
+    : 100;
+
+  let status: 'Safe' | 'Borderline' | 'Shortage' = 'Safe';
+  if (percentage < 75) status = 'Shortage';
+  else if (percentage < 85) status = 'Borderline';
+
+  return {
+    totalConductedUnits,
+    totalAttendedUnits,
+    percentage,
+    status,
+    totalClassesConducted: records.length,
+    totalClassesAttended: presentsCount + latesCount + excusedCount,
+    presentsCount,
+    absentsCount,
+    latesCount,
+    excusedCount,
+    streakDays: 0
+  };
+}
+

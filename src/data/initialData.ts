@@ -1,4 +1,4 @@
-import { User, Student, Faculty, Subject, TimetableSlot, AttendanceRecord, LeaveRequest, AuditLog } from '../types';
+import { User, Student, Faculty, Subject, TimetableSlot, AttendanceRecord, LeaveRequest, AuditLog, ParentRecord, Department } from '../types';
 
 export const INITIAL_USERS: User[] = [
   {
@@ -69,12 +69,14 @@ export const INITIAL_STUDENTS: Student[] = [
     name: 'Rahul Sharma',
     email: 'rahul.sharma@student.edu',
     department: 'Computer Science',
+    year: '2nd Year',
     semester: 4,
     section: 'A',
     parentId: 'PAR301',
     parentName: 'Vikram Sharma',
     parentPhone: '+1 (555) 987-6543',
-    avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150'
+    avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150',
+    approvalStatus: 'approved'
   },
   {
     id: 'STU202402',
@@ -82,12 +84,14 @@ export const INITIAL_STUDENTS: Student[] = [
     name: 'Priya Sharma',
     email: 'priya.sharma@student.edu',
     department: 'Computer Science',
+    year: '1st Year',
     semester: 2,
     section: 'B',
     parentId: 'PAR301',
     parentName: 'Vikram Sharma',
     parentPhone: '+1 (555) 987-6543',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'
+    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+    approvalStatus: 'approved'
   },
   {
     id: 'STU202403',
@@ -95,9 +99,11 @@ export const INITIAL_STUDENTS: Student[] = [
     name: 'Aarav Patel',
     email: 'aarav.patel@student.edu',
     department: 'Computer Science',
+    year: '2nd Year',
     semester: 4,
     section: 'A',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150'
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+    approvalStatus: 'approved'
   },
   {
     id: 'STU202404',
@@ -105,9 +111,11 @@ export const INITIAL_STUDENTS: Student[] = [
     name: 'Ananya Verma',
     email: 'ananya.verma@student.edu',
     department: 'Computer Science',
+    year: '2nd Year',
     semester: 4,
     section: 'A',
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150'
+    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
+    approvalStatus: 'approved'
   }
 ];
 
@@ -120,7 +128,8 @@ export const INITIAL_FACULTY: Faculty[] = [
     department: 'Computer Science',
     designation: 'Associate Professor',
     phone: '+1 (555) 234-5678',
-    subjectsHandled: ['SUB101', 'SUB103']
+    subjectsHandled: ['SUB101', 'SUB103'],
+    approvalStatus: 'approved'
   },
   {
     id: 'FAC102',
@@ -130,7 +139,8 @@ export const INITIAL_FACULTY: Faculty[] = [
     department: 'Computer Science',
     designation: 'Assistant Professor',
     phone: '+1 (555) 876-5432',
-    subjectsHandled: ['SUB102', 'SUB104']
+    subjectsHandled: ['SUB102', 'SUB104'],
+    approvalStatus: 'approved'
   }
 ];
 
@@ -404,3 +414,52 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
     details: 'Scanned QR code and logged Present for CS401'
   }
 ];
+
+export const INITIAL_PARENTS: ParentRecord[] = [
+  {
+    id: 'PAR301',
+    name: 'Vikram Sharma',
+    email: 'vikram.sharma@parent.com',
+    phone: '+1 (555) 987-6543',
+    childRollNo: '24CS01',
+    childName: 'Rahul Sharma',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'PAR302',
+    name: 'Suresh Patel',
+    email: 'suresh.patel@parent.com',
+    phone: '+1 (555) 321-7654',
+    childRollNo: '24CS03',
+    childName: 'Aarav Patel',
+    createdAt: new Date().toISOString()
+  }
+];
+
+export const INITIAL_DEPARTMENTS: Department[] = [
+  {
+    id: 'DEP101',
+    code: 'CSE',
+    name: 'Computer Science & Engineering',
+    hodName: 'Dr. Arthur Vance'
+  },
+  {
+    id: 'DEP102',
+    code: 'ECE',
+    name: 'Electronics & Communication',
+    hodName: 'Dr. Alan Turing'
+  },
+  {
+    id: 'DEP103',
+    code: 'MECH',
+    name: 'Mechanical Engineering',
+    hodName: 'Prof. Nikola Tesla'
+  },
+  {
+    id: 'DEP104',
+    code: 'CIVIL',
+    name: 'Civil Engineering',
+    hodName: 'Dr. Isambard Brunel'
+  }
+];
+

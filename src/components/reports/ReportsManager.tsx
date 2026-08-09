@@ -3,8 +3,9 @@ import {
   FileSpreadsheet, Download, Printer, Shield, Search, RefreshCw, Filter
 } from 'lucide-react';
 import { Student, Subject, AttendanceRecord, AuditLog } from '../../types';
-import { exportToCSV, calculateWeightedAttendance } from '../../utils/attendance';
+import { calculateOverallAttendance } from '../../utils/attendance';
 import { getAuditLogs, getAttendanceRecords } from '../../services/storage';
+import * as XLSX from 'xlsx';
 
 interface Props {
   students: Student[];
@@ -19,25 +20,53 @@ export const ReportsManager: React.FC<Props> = ({ students, subjects }) => {
   const attendanceRecords = getAttendanceRecords();
   const auditLogs = getAuditLogs();
 
-  const handleExportAttendanceCSV = () => {
-    const reportData = students.map(st => {
-      const summary = calculateWeightedAttendance(attendanceRecords, st.id);
-      return {
+  const generateReportRows = () => {
+    return students.map(st => {
+      const stAtts = attendanceRecords.filter(a => a.studentId === st.id);
+      const summary = calculateOverallAttendance(stAtts, subjects);
+
+      const row: any = {
         'Roll No': st.rollNo,
         'Student Name': st.name,
         'Department': st.department,
-        'Semester': st.semester,
-        'Total Conducted Units': summary.totalConductedUnits,
-        'Attended Units': summary.totalAttendedUnits,
-        'Weighted Percentage': `${summary.percentage}%`,
-        'Eligibility Status': summary.status,
-        'Presents': summary.presentsCount,
-        'Absents': summary.absentsCount,
-        'Lates': summary.latesCount
+        'Year / Semester': `${st.year || '2nd Year'} (Sem ${st.semester})`
       };
-    });
 
-    exportToCSV(`College_Attendance_Report_${new Date().toISOString().split('T')[0]}`, reportData);
+      // Add subject-wise attendance %
+      subjects.forEach(sub => {
+        const subAtts = stAtts.filter(a => a.subjectId === sub.id);
+        const presentCount = subAtts.filter(a => a.status === 'present').length;
+        const totalCount = subAtts.length || 1;
+        const pct = Math.round((presentCount / totalCount) * 100);
+        row[`${sub.code} (${sub.type}) %`] = `${pct}%`;
+      });
+
+      row['Overall Attendance %'] = `${summary.percentage}%`;
+      row['Status'] = summary.status === 'Shortage' ? 'Shortage Risk (<75%)' : summary.status;
+      return row;
+    });
+  };
+
+  const handleExportCSV = () => {
+    const reportData = generateReportRows();
+    const headers = Object.keys(reportData[0] || {}).join(',');
+    const rows = reportData.map(obj => Object.values(obj).map(v => `"${v}"`).join(','));
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers, ...rows].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Annamalai_Faculty_Attendance_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportExcel = () => {
+    const reportData = generateReportRows();
+    const ws = XLSX.utils.json_to_sheet(reportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Attendance Report');
+    XLSX.writeFile(wb, `Annamalai_Faculty_Attendance_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const handleExportAuditLogsCSV = () => {
@@ -48,8 +77,16 @@ export const ReportsManager: React.FC<Props> = ({ students, subjects }) => {
       'Action': l.action,
       'Details': l.details
     }));
-
-    exportToCSV(`Audit_Logs_${new Date().toISOString().split('T')[0]}`, logData);
+    const headers = Object.keys(logData[0] || {}).join(',');
+    const rows = logData.map(obj => Object.values(obj).map(v => `"${v}"`).join(','));
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers, ...rows].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Audit_Logs_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handlePrint = () => {
@@ -64,37 +101,46 @@ export const ReportsManager: React.FC<Props> = ({ students, subjects }) => {
   });
 
   return (
-    <div className="space-y-4 max-w-5xl mx-auto animate-fade-in">
+    <div className="space-y-4 max-w-5xl mx-auto animate-fade-in pb-12">
       
       {/* Header Controls */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl">
+          <div className="p-2.5 bg-amber-500/10 text-amber-500 rounded-xl border border-amber-500/20">
             <FileSpreadsheet className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-base font-bold font-heading text-slate-900 dark:text-white">
-              Reports & System Audit Logs
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              Faculty Reports & Student Performance
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Export CSV attendance sheets, print summaries, or view system logs.
+            <p className="text-xs text-slate-500">
+              Download CSV and Excel student attendance reports with subject-wise percentages.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           {activeTab === 'attendance' ? (
-            <button
-              onClick={handleExportAttendanceCSV}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
-            >
-              <Download className="w-4 h-4" />
-              Export CSV
-            </button>
+            <>
+              <button
+                onClick={handleExportCSV}
+                className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5"
+              >
+                <Download className="w-4 h-4 text-amber-500" />
+                Export CSV
+              </button>
+              <button
+                onClick={handleExportExcel}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
+              >
+                <Download className="w-4 h-4" />
+                Export Excel (.xlsx)
+              </button>
+            </>
           ) : (
             <button
               onClick={handleExportAuditLogsCSV}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
             >
               <Download className="w-4 h-4" />
               Export Logs
@@ -103,7 +149,7 @@ export const ReportsManager: React.FC<Props> = ({ students, subjects }) => {
 
           <button
             onClick={handlePrint}
-            className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5"
+            className="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5"
           >
             <Printer className="w-4 h-4" />
             Print
@@ -117,21 +163,21 @@ export const ReportsManager: React.FC<Props> = ({ students, subjects }) => {
           onClick={() => setActiveTab('attendance')}
           className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
             activeTab === 'attendance'
-              ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+              ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs font-bold'
               : 'text-slate-600 dark:text-slate-400'
           }`}
         >
-          Attendance Summary
+          Attendance Roster
         </button>
         <button
           onClick={() => setActiveTab('audit')}
           className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
             activeTab === 'audit'
-              ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+              ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs font-bold'
               : 'text-slate-600 dark:text-slate-400'
           }`}
         >
-          Audit Logs ({auditLogs.length})
+          Audit Trail ({auditLogs.length})
         </button>
       </div>
 
@@ -148,12 +194,12 @@ export const ReportsManager: React.FC<Props> = ({ students, subjects }) => {
                 placeholder="Search student by name or roll no..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
           </div>
 
-          {/* Table Container with smooth mobile scroll */}
+          {/* Table Container */}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
@@ -161,14 +207,14 @@ export const ReportsManager: React.FC<Props> = ({ students, subjects }) => {
                   <th className="p-3">Roll No</th>
                   <th className="p-3">Student Name</th>
                   <th className="p-3">Department</th>
-                  <th className="p-3 text-center">Conducted / Attended</th>
-                  <th className="p-3 text-center">Weighted %</th>
+                  <th className="p-3 text-center">Overall Attendance %</th>
                   <th className="p-3 text-right">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {filteredStudents.map(st => {
-                  const summary = calculateWeightedAttendance(attendanceRecords, st.id);
+                  const stAtts = attendanceRecords.filter(a => a.studentId === st.id);
+                  const summary = calculateOverallAttendance(stAtts, subjects);
                   return (
                     <tr key={st.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                       <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">
@@ -180,10 +226,7 @@ export const ReportsManager: React.FC<Props> = ({ students, subjects }) => {
                       <td className="p-3 text-slate-500 dark:text-slate-400">
                         {st.department} (Sem {st.semester})
                       </td>
-                      <td className="p-3 text-center font-semibold">
-                        {summary.totalAttendedUnits} / {summary.totalConductedUnits} units
-                      </td>
-                      <td className="p-3 text-center font-black font-heading text-slate-900 dark:text-white">
+                      <td className="p-3 text-center font-extrabold text-slate-900 dark:text-white">
                         {summary.percentage}%
                       </td>
                       <td className="p-3 text-right">
@@ -194,7 +237,7 @@ export const ReportsManager: React.FC<Props> = ({ students, subjects }) => {
                             ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                             : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
                         }`}>
-                          {summary.status}
+                          {summary.status === 'Shortage' ? 'Shortage Risk' : summary.status}
                         </span>
                       </td>
                     </tr>
@@ -211,7 +254,7 @@ export const ReportsManager: React.FC<Props> = ({ students, subjects }) => {
       {activeTab === 'audit' && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
           <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Shield className="w-4 h-4 text-indigo-500" />
+            <Shield className="w-4 h-4 text-amber-500" />
             System Audit Trail
           </h4>
 
