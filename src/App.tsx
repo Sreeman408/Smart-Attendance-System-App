@@ -177,6 +177,7 @@ export default function App() {
               selectedChildId={selectedChildId}
               onSelectChild={setSelectedChildId}
               activeTab={activeTab}
+              timetable={timetable}
             />
           )}
 

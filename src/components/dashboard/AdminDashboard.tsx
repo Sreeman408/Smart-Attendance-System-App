@@ -65,6 +65,17 @@ export const AdminDashboard: React.FC<Props> = ({
     loadExtraAdminData();
   }, []);
 
+  useEffect(() => {
+    if (activeTab === 'crud') {
+      setSubSection('crud');
+    } else if (activeTab === 'timetable') {
+      setSubSection('crud');
+      setCrudTab('timetable');
+    } else if (activeTab === 'directory' || activeTab === 'dashboard') {
+      setSubSection('overview');
+    }
+  }, [activeTab]);
+
   const loadExtraAdminData = async () => {
     const pars = await fetchParentsFromDB();
     const depts = await fetchDepartmentsFromDB();

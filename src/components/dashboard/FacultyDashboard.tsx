@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Faculty, Subject, Student, AttendanceRecord, TimetableSlot, AttendanceStatus, SaturdayConfig } from '../../types';
 import { QRGenerator } from '../qr/QRGenerator';
-import { CheckSquare, QrCode, Clock, Users, CheckCircle2, Save, Calendar, Download, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { ReportsManager } from '../reports/ReportsManager';
+import { LeaveManager } from '../leaves/LeaveManager';
+import { CheckSquare, QrCode, Clock, Users, CheckCircle2, Save, Calendar, Download, AlertCircle, FileSpreadsheet, MapPin } from 'lucide-react';
 import { addAttendanceRecordToDB, fetchAttendanceRecordsFromDB, fetchSaturdayConfigFromDB, addAuditLogDB } from '../../services/dbService';
 import * as XLSX from 'xlsx';
 
@@ -42,7 +44,6 @@ export const FacultyDashboard: React.FC<Props> = ({
     initData();
   }, []);
 
-  // Update Saturday boolean based on date picked
   useEffect(() => {
     if (selectedDate) {
       const day = new Date(selectedDate).getDay();
@@ -50,7 +51,6 @@ export const FacultyDashboard: React.FC<Props> = ({
     }
   }, [selectedDate]);
 
-  // In-memory attendance grid state for current class marking
   const [attendanceMap, setAttendanceMap] = useState<Record<string, AttendanceStatus>>(() => {
     const initial: Record<string, AttendanceStatus> = {};
     students.forEach(st => { initial[st.id] = 'present'; });
@@ -99,7 +99,6 @@ export const FacultyDashboard: React.FC<Props> = ({
       `Marked ${isSaturdaySession ? 'SATURDAY' : 'REGULAR'} attendance for ${students.length} students in ${currentSubject.name}`
     );
 
-    // Refresh records
     const updatedRecs = await fetchAttendanceRecordsFromDB();
     setAllAttendance(updatedRecs);
 
@@ -107,7 +106,6 @@ export const FacultyDashboard: React.FC<Props> = ({
     setTimeout(() => setSaveSuccessMsg(null), 4000);
   };
 
-  // Export Saturday Class Attendance Data
   const exportSaturdayReport = () => {
     const saturdayRecords = allAttendance.filter(r => r.isSaturday || new Date(r.date).getDay() === 6);
     if (saturdayRecords.length === 0) {
@@ -134,10 +132,103 @@ export const FacultyDashboard: React.FC<Props> = ({
     XLSX.writeFile(wb, `Saturday_Attendance_${faculty.name.replace(/\s+/g, '_')}.xlsx`);
   };
 
+  // 1. QR Generator Tab
   if (activeTab === 'qr_gen') {
     return <QRGenerator faculty={faculty} subjects={subjects} timetable={timetable} />;
   }
 
+  // 2. Reports Tab
+  if (activeTab === 'reports') {
+    return <ReportsManager students={students} subjects={subjects} />;
+  }
+
+  // 3. Leaves Tab
+  if (activeTab === 'leaves') {
+    return (
+      <LeaveManager
+        user={{
+          id: faculty.id,
+          name: faculty.name,
+          role: 'faculty',
+          email: faculty.email,
+          facultyId: faculty.id
+        }}
+        onLeaveUpdated={() => {}}
+      />
+    );
+  }
+
+  // 4. Timetable Schedule Tab
+  if (activeTab === 'timetable') {
+    const facultySlots = timetable.filter(t => t.facultyId === faculty.id || t.facultyName.includes(faculty.name));
+    
+    // Add Saturday slots if mapping is enabled
+    const saturdaySlots: TimetableSlot[] = saturdayConfig.enabled ? facultySlots
+      .filter(t => t.dayOfWeek === saturdayConfig.mappedDay)
+      .map((t, idx) => ({
+        ...t,
+        id: `fac_sat_slot_${idx}_${t.id}`,
+        dayOfWeek: 'Saturday',
+        isSaturdayMapped: true
+      })) : [];
+
+    const fullFacultyTimetable = [...facultySlots, ...saturdaySlots];
+
+    return (
+      <div className="space-y-4 max-w-4xl mx-auto animate-fade-in pb-12">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
+          <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl border border-amber-500/20">
+              <Clock className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Faculty Teaching Schedule ({faculty.name})
+              </h3>
+              <p className="text-xs text-slate-500">
+                {faculty.department} • {faculty.designation}
+              </p>
+            </div>
+          </div>
+
+          {saturdayConfig.enabled && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-700 dark:text-amber-300 text-xs flex items-center justify-between font-bold">
+              <span className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-amber-500" />
+                Saturday Class copies <strong>{saturdayConfig.mappedDay}'s</strong> teaching schedule.
+              </span>
+              <span className="px-2 py-0.5 bg-amber-500 text-slate-950 text-[10px] rounded uppercase">Active Mapping</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {fullFacultyTimetable.map(slot => (
+              <div key={slot.id} className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-amber-500/20 text-amber-700 dark:text-amber-400 rounded-md">
+                    {slot.dayOfWeek} • {slot.timeSlot}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-500">
+                    Room: {slot.roomNo}
+                  </span>
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                    {slot.subjectName} ({slot.subjectCode})
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {slot.department} • Sem {slot.semester} (Section {slot.section})
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Default: Roster & Class Marking Grid (for 'dashboard' or 'mark' tabs)
   return (
     <div className="space-y-4 max-w-5xl mx-auto animate-fade-in pb-12">
       
@@ -151,7 +242,7 @@ export const FacultyDashboard: React.FC<Props> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Faculty Portal - Attendance Roster
+                Faculty Portal - Class Attendance Roster
               </h3>
               <p className="text-xs text-slate-500">
                 {faculty.name} ({faculty.designation}) • {faculty.department}
@@ -210,7 +301,6 @@ export const FacultyDashboard: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Saturday Banner if date selected is Saturday */}
         {isSaturdaySession && (
           <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-600 dark:text-amber-400 text-xs flex items-center justify-between">
             <span className="font-bold flex items-center gap-1.5">
@@ -264,7 +354,6 @@ export const FacultyDashboard: React.FC<Props> = ({
         <div className="space-y-2">
           {students.map(st => {
             const currentStatus = attendanceMap[st.id] || 'present';
-            // Compute student's Saturday attendance stats
             const studentSatRecs = allAttendance.filter(r => r.studentId === st.id && (r.isSaturday || new Date(r.date).getDay() === 6));
             const satPresentCount = studentSatRecs.filter(r => r.status === 'present' || r.status === 'late').length;
             const satPct = studentSatRecs.length > 0 ? Math.round((satPresentCount / studentSatRecs.length) * 100) : 100;
