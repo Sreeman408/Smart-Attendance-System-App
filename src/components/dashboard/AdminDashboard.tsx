@@ -33,7 +33,7 @@ interface Props {
   leaves: LeaveRequest[];
   activeTab: string;
   onTabChange: (tabId: string) => void;
-  onDataChanged: () => void;
+  onDataChanged: () => void | Promise<void>;
 }
 
 export const AdminDashboard: React.FC<Props> = ({
@@ -176,18 +176,20 @@ export const AdminDashboard: React.FC<Props> = ({
     e.preventDefault();
     try {
       if (crudTab === 'subjects') {
+        const assignedFac = faculty.find(f => f.id === formData.facultyId || f.facultyCode === formData.facultyId);
         const sub: Subject = {
-          id: editingItem?.id || `SUB_${Date.now()}`,
+          id: editingItem?.id || (formData.code?.trim() ? `SUB_${formData.code.trim().replace(/[^a-zA-Z0-9]/g, '_')}` : `SUB_${Date.now()}`),
           code: (formData.code || 'CS501').trim(),
           name: (formData.name || 'New Subject').trim(),
-          department: formData.department || 'Computer Science',
-          semester: Number(formData.semester || 4),
+          department: formData.department || 'Department of Computer Science & Engineering',
+          semester: Number(formData.semester || 5),
           type: formData.type || 'Lecture',
           credits: Number(formData.credits || 3),
-          facultyId: formData.facultyId || faculty[0]?.id || 'FAC101',
-          facultyName: faculty.find(f => f.id === formData.facultyId)?.name || 'Prof. Robert Langdon'
+          facultyId: formData.facultyId || assignedFac?.id || '',
+          facultyName: assignedFac?.name || formData.facultyName || ''
         };
-        await saveSubjectToDB(sub);
+        const ok = await saveSubjectToDB(sub);
+        if (!ok) throw new Error('Cloud database write failed for subject.');
         setActionFeedback({ type: 'success', message: `Subject "${sub.name}" saved successfully!` });
       } else if (crudTab === 'faculty') {
         let passwordHash = editingItem?.passwordHash;
@@ -205,18 +207,19 @@ export const AdminDashboard: React.FC<Props> = ({
         }
 
         const fac: Faculty = {
-          id: editingItem?.id || `FAC_${Date.now()}`,
+          id: editingItem?.id || (formData.facultyCode?.trim() ? `FAC_${formData.facultyCode.trim().replace(/[^a-zA-Z0-9]/g, '_')}` : `FAC_${Date.now()}`),
           facultyCode: (formData.facultyCode || `FAC-${Math.floor(100 + Math.random() * 900)}`).trim(),
           name: (formData.name || 'New Faculty').trim(),
           email: (formData.email || 'faculty@college.edu').trim(),
-          department: formData.department || 'Computer Science',
+          department: formData.department || 'Department of Computer Science & Engineering',
           designation: formData.designation || 'Assistant Professor',
           phone: (formData.phone || '').trim(),
           subjectsHandled,
           passwordHash,
           approvalStatus: (formData.approvalStatus as 'approved' | 'pending') || 'approved'
         };
-        await saveFacultyToDB(fac);
+        const ok = await saveFacultyToDB(fac);
+        if (!ok) throw new Error('Cloud database write failed for faculty.');
         setActionFeedback({ type: 'success', message: `Faculty "${fac.name}" (${fac.facultyCode}) saved successfully!` });
       } else if (crudTab === 'students') {
         let passwordHash = editingItem?.passwordHash;
@@ -227,12 +230,12 @@ export const AdminDashboard: React.FC<Props> = ({
         }
 
         const stu: Student = {
-          id: editingItem?.id || `STU_${Date.now()}`,
+          id: editingItem?.id || formData.rollNo?.trim() || `STU_${Date.now()}`,
           rollNo: (formData.rollNo || '').trim(),
           name: (formData.name || '').trim(),
           email: (formData.email || '').trim(),
           phone: (formData.phone || '').trim(),
-          department: formData.department || 'Computer Science',
+          department: formData.department || 'Department of Computer Science & Engineering',
           year: formData.year || '1st Year',
           semester: Number(formData.semester || 1),
           section: formData.section || 'A',
@@ -241,7 +244,8 @@ export const AdminDashboard: React.FC<Props> = ({
           parentPhone: formData.parentPhone?.trim() || undefined,
           approvalStatus: (formData.approvalStatus as 'approved' | 'pending') || 'approved'
         };
-        await saveStudentToDB(stu);
+        const ok = await saveStudentToDB(stu);
+        if (!ok) throw new Error('Cloud database write failed for student.');
         setActionFeedback({ type: 'success', message: `Student "${stu.name}" (${stu.rollNo}) saved successfully!` });
       } else if (crudTab === 'parents') {
         let passwordHash = editingItem?.passwordHash;
@@ -272,25 +276,29 @@ export const AdminDashboard: React.FC<Props> = ({
           address: (formData.address || '').trim(),
           passwordHash
         };
-        await saveParentToDB(par);
+        const ok = await saveParentToDB(par);
+        if (!ok) throw new Error('Cloud database write failed for parent.');
         setActionFeedback({ type: 'success', message: `Parent "${par.name}" saved successfully!` });
       } else if (crudTab === 'timetable') {
+        const selectedSub = subjects.find(s => s.id === formData.subjectId || s.code === formData.subjectId);
+        const selectedFac = faculty.find(f => f.id === formData.facultyId || f.facultyCode === formData.facultyId);
         const tt: TimetableSlot = {
           id: editingItem?.id || `SLOT_${Date.now()}`,
           dayOfWeek: formData.dayOfWeek || 'Monday',
           timeSlot: formData.timeSlot || '09:00 AM - 10:00 AM',
-          subjectId: formData.subjectId || subjects[0]?.id || 'SUB101',
-          subjectName: subjects.find(s => s.id === formData.subjectId)?.name || 'Data Structures',
-          subjectCode: subjects.find(s => s.id === formData.subjectId)?.code || 'CS401',
-          subjectType: subjects.find(s => s.id === formData.subjectId)?.type || 'Lecture',
-          facultyId: formData.facultyId || faculty[0]?.id || 'FAC101',
-          facultyName: faculty.find(f => f.id === formData.facultyId)?.name || 'Prof. Robert Langdon',
+          subjectId: formData.subjectId || selectedSub?.id || (subjects[0]?.id || 'SUB501'),
+          subjectName: selectedSub?.name || formData.subjectName || '',
+          subjectCode: selectedSub?.code || formData.subjectCode || '',
+          subjectType: selectedSub?.type || formData.subjectType || 'Lecture',
+          facultyId: formData.facultyId || selectedFac?.id || (faculty[0]?.id || ''),
+          facultyName: selectedFac?.name || formData.facultyName || (faculty[0]?.name || ''),
           roomNo: formData.roomNo || 'LH-201',
-          department: formData.department || 'Computer Science',
-          semester: Number(formData.semester || 4),
+          department: formData.department || selectedSub?.department || 'Department of Computer Science & Engineering',
+          semester: Number(formData.semester || selectedSub?.semester || 5),
           section: formData.section || 'A'
         };
-        await saveTimetableSlotToDB(tt);
+        const ok = await saveTimetableSlotToDB(tt);
+        if (!ok) throw new Error('Cloud database write failed for timetable slot.');
         setActionFeedback({ type: 'success', message: `Timetable slot saved successfully!` });
       } else if (crudTab === 'departments') {
         const dept: Department = {
@@ -299,15 +307,16 @@ export const AdminDashboard: React.FC<Props> = ({
           name: formData.name || 'Information Technology',
           hodName: formData.hodName || 'Dr. Arthur Vance'
         };
-        await saveDepartmentToDB(dept);
+        const ok = await saveDepartmentToDB(dept);
+        if (!ok) throw new Error('Cloud database write failed for department.');
         setActionFeedback({ type: 'success', message: `Department "${dept.name}" saved successfully!` });
       }
 
       setModalMode(null);
       setEditingItem(null);
       setFormData({});
+      await onDataChanged();
       await loadExtraAdminData();
-      onDataChanged();
     } catch (err: any) {
       console.error('Error saving entity:', err);
       setActionFeedback({ type: 'error', message: `Save failed: ${err.message || 'Database error'}` });
@@ -359,7 +368,7 @@ export const AdminDashboard: React.FC<Props> = ({
         name: '',
         email: '',
         phone: '',
-        department: 'Computer Science',
+        department: 'Department of Computer Science & Engineering',
         year: '1st Year',
         semester: 1,
         section: 'A',
@@ -374,7 +383,7 @@ export const AdminDashboard: React.FC<Props> = ({
         name: '',
         email: '',
         phone: '',
-        department: 'Computer Science',
+        department: 'Department of Computer Science & Engineering',
         designation: 'Assistant Professor',
         password: '',
         approvalStatus: 'approved',
@@ -388,6 +397,33 @@ export const AdminDashboard: React.FC<Props> = ({
         password: '',
         childRollNos: '',
         address: ''
+      });
+    } else if (crudTab === 'subjects') {
+      setFormData({
+        code: '',
+        name: '',
+        type: 'Lecture',
+        credits: 3,
+        department: 'Department of Computer Science & Engineering',
+        semester: 5,
+        facultyId: faculty[0]?.id || ''
+      });
+    } else if (crudTab === 'timetable') {
+      setFormData({
+        dayOfWeek: 'Monday',
+        timeSlot: '08.30 AM - 09.30 AM',
+        subjectId: subjects[0]?.id || '',
+        facultyId: faculty[0]?.id || '',
+        roomNo: 'Hall - 2211',
+        department: 'Department of Computer Science & Engineering',
+        semester: 5,
+        section: 'A'
+      });
+    } else if (crudTab === 'departments') {
+      setFormData({
+        code: '',
+        name: '',
+        hodName: ''
       });
     } else {
       setFormData({});
@@ -414,7 +450,7 @@ export const AdminDashboard: React.FC<Props> = ({
         ...item,
         password: '',
         phone: item.phone || '',
-        department: item.department || 'Computer Science',
+        department: item.department || 'Department of Computer Science & Engineering',
         designation: item.designation || 'Assistant Professor',
         approvalStatus: item.approvalStatus || 'approved',
         subjectsHandled: Array.isArray(item.subjectsHandled) ? item.subjectsHandled.join(', ') : (item.subjectsHandled || '')
@@ -430,6 +466,29 @@ export const AdminDashboard: React.FC<Props> = ({
         address: item.address || '',
         childRollNos: rollString,
         childRollNo: item.childRollNo || ''
+      });
+    } else if (crudTab === 'subjects') {
+      setFormData({
+        ...item,
+        code: item.code || '',
+        name: item.name || '',
+        type: item.type || 'Lecture',
+        credits: item.credits || 3,
+        department: item.department || 'Department of Computer Science & Engineering',
+        semester: item.semester || 5,
+        facultyId: item.facultyId || ''
+      });
+    } else if (crudTab === 'timetable') {
+      setFormData({
+        ...item,
+        dayOfWeek: item.dayOfWeek || 'Monday',
+        timeSlot: item.timeSlot || '08.30 AM - 09.30 AM',
+        subjectId: item.subjectId || '',
+        facultyId: item.facultyId || '',
+        roomNo: item.roomNo || 'Hall - 2211',
+        department: item.department || 'Department of Computer Science & Engineering',
+        semester: item.semester || 5,
+        section: item.section || 'A'
       });
     } else {
       setFormData({ ...item });
@@ -975,31 +1034,101 @@ export const AdminDashboard: React.FC<Props> = ({
               <form onSubmit={handleSaveEntity} className="space-y-3">
                 
                 {crudTab === 'subjects' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <input
-                      type="text"
-                      required
-                      placeholder="Code (e.g. CS401)"
-                      value={formData.code || ''}
-                      onChange={e => setFormData({ ...formData, code: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Subject Name"
-                      value={formData.name || ''}
-                      onChange={e => setFormData({ ...formData, name: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    />
-                    <select
-                      value={formData.type || 'Lecture'}
-                      onChange={e => setFormData({ ...formData, type: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    >
-                      <option value="Lecture">Lecture</option>
-                      <option value="Practical">Practical (Lab)</option>
-                    </select>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Subject Code *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 22CSPC501"
+                        value={formData.code || ''}
+                        onChange={e => setFormData({ ...formData, code: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Subject Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Theory of Computation"
+                        value={formData.name || ''}
+                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Type *</label>
+                      <select
+                        value={formData.type || 'Lecture'}
+                        onChange={e => setFormData({ ...formData, type: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="Lecture">Lecture</option>
+                        <option value="Practical">Practical (Lab)</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Credits *</label>
+                      <select
+                        value={formData.credits || 3}
+                        onChange={e => setFormData({ ...formData, credits: Number(e.target.value) })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        {[1, 2, 3, 4, 5, 6].map(c => (
+                          <option key={c} value={c}>{c} Credits</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Semester *</label>
+                      <select
+                        value={formData.semester || 5}
+                        onChange={e => setFormData({ ...formData, semester: Number(e.target.value) })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                          <option key={s} value={s}>Semester {s}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Department *</label>
+                      <select
+                        value={formData.department || 'Department of Computer Science & Engineering'}
+                        onChange={e => setFormData({ ...formData, department: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="Department of Computer Science & Engineering">Department of Computer Science & Engineering</option>
+                        <option value="Computer Science">Computer Science</option>
+                        <option value="Information Technology">Information Technology</option>
+                        <option value="Electronics & Communication">Electronics & Communication</option>
+                        <option value="Electrical & Electronics">Electrical & Electronics</option>
+                        <option value="Mechanical">Mechanical</option>
+                        <option value="Civil">Civil</option>
+                        {departments.map(d => (
+                          !['Department of Computer Science & Engineering', 'Computer Science', 'Information Technology', 'Electronics & Communication', 'Electrical & Electronics', 'Mechanical', 'Civil'].includes(d.name) && (
+                            <option key={d.id} value={d.name}>{d.name}</option>
+                          )
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Assigned Faculty</label>
+                      <select
+                        value={formData.facultyId || ''}
+                        onChange={e => {
+                          const fac = faculty.find(f => f.id === e.target.value);
+                          setFormData({ ...formData, facultyId: e.target.value, facultyName: fac?.name || '' });
+                        }}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="">-- Select Faculty --</option>
+                        {faculty.map(f => (
+                          <option key={f.id} value={f.id}>{f.name} ({f.facultyCode})</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 )}
 
@@ -1344,35 +1473,126 @@ export const AdminDashboard: React.FC<Props> = ({
                 )}
 
                 {crudTab === 'timetable' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <select
-                      value={formData.dayOfWeek || 'Monday'}
-                      onChange={e => setFormData({ ...formData, dayOfWeek: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    >
-                      <option value="Monday">Monday</option>
-                      <option value="Tuesday">Tuesday</option>
-                      <option value="Wednesday">Wednesday</option>
-                      <option value="Thursday">Thursday</option>
-                      <option value="Friday">Friday</option>
-                      <option value="Saturday">Saturday</option>
-                    </select>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Time Slot (e.g. 09:00 AM - 10:00 AM)"
-                      value={formData.timeSlot || ''}
-                      onChange={e => setFormData({ ...formData, timeSlot: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Room No (e.g. LH-201)"
-                      value={formData.roomNo || ''}
-                      onChange={e => setFormData({ ...formData, roomNo: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Day of Week *</label>
+                      <select
+                        value={formData.dayOfWeek || 'Monday'}
+                        onChange={e => setFormData({ ...formData, dayOfWeek: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="Monday">Monday</option>
+                        <option value="Tuesday">Tuesday</option>
+                        <option value="Wednesday">Wednesday</option>
+                        <option value="Thursday">Thursday</option>
+                        <option value="Friday">Friday</option>
+                        <option value="Saturday">Saturday</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Time Slot *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 08.30 AM - 09.30 AM"
+                        value={formData.timeSlot || ''}
+                        onChange={e => setFormData({ ...formData, timeSlot: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Room No *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Hall - 2211"
+                        value={formData.roomNo || ''}
+                        onChange={e => setFormData({ ...formData, roomNo: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Subject *</label>
+                      <select
+                        value={formData.subjectId || ''}
+                        onChange={e => {
+                          const sub = subjects.find(s => s.id === e.target.value);
+                          setFormData({
+                            ...formData,
+                            subjectId: e.target.value,
+                            subjectName: sub?.name || '',
+                            subjectCode: sub?.code || '',
+                            subjectType: sub?.type || 'Lecture',
+                            facultyId: sub?.facultyId || formData.facultyId || '',
+                            facultyName: sub?.facultyName || formData.facultyName || ''
+                          });
+                        }}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="">-- Select Subject --</option>
+                        {subjects.map(s => (
+                          <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Faculty In-Charge</label>
+                      <select
+                        value={formData.facultyId || ''}
+                        onChange={e => {
+                          const fac = faculty.find(f => f.id === e.target.value);
+                          setFormData({ ...formData, facultyId: e.target.value, facultyName: fac?.name || '' });
+                        }}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="">-- Select Faculty --</option>
+                        {faculty.map(f => (
+                          <option key={f.id} value={f.id}>{f.name} ({f.facultyCode})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Department *</label>
+                      <select
+                        value={formData.department || 'Department of Computer Science & Engineering'}
+                        onChange={e => setFormData({ ...formData, department: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="Department of Computer Science & Engineering">Department of Computer Science & Engineering</option>
+                        <option value="Computer Science">Computer Science</option>
+                        <option value="Information Technology">Information Technology</option>
+                        <option value="Electronics & Communication">Electronics & Communication</option>
+                        <option value="Electrical & Electronics">Electrical & Electronics</option>
+                        <option value="Mechanical">Mechanical</option>
+                        <option value="Civil">Civil</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Semester *</label>
+                      <select
+                        value={formData.semester || 5}
+                        onChange={e => setFormData({ ...formData, semester: Number(e.target.value) })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                          <option key={s} value={s}>Semester {s}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Section *</label>
+                      <select
+                        value={formData.section || 'A'}
+                        onChange={e => setFormData({ ...formData, section: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="A">Section A</option>
+                        <option value="B">Section B</option>
+                        <option value="B Batch">B Batch</option>
+                        <option value="C">Section C</option>
+                        <option value="D">Section D</option>
+                      </select>
+                    </div>
                   </div>
                 )}
 
@@ -1460,6 +1680,7 @@ export const AdminDashboard: React.FC<Props> = ({
                       <th className="p-3">Subject Name</th>
                       <th className="p-3">Type</th>
                       <th className="p-3">Credits</th>
+                      <th className="p-3">Assigned Faculty</th>
                       <th className="p-3">Department</th>
                       <th className="p-3 text-right">Actions</th>
                     </tr>
@@ -1468,6 +1689,7 @@ export const AdminDashboard: React.FC<Props> = ({
                     <tr>
                       <th className="p-3">Day</th>
                       <th className="p-3">Subject</th>
+                      <th className="p-3">Faculty</th>
                       <th className="p-3">Time Slot & Room</th>
                       <th className="p-3">Department / Sem</th>
                       <th className="p-3 text-right">Actions</th>
@@ -1489,6 +1711,7 @@ export const AdminDashboard: React.FC<Props> = ({
                       <td className="p-3 font-bold text-slate-900 dark:text-white">{sub.name}</td>
                       <td className="p-3 font-semibold">{sub.type}</td>
                       <td className="p-3 text-slate-500">{sub.credits} Credits</td>
+                      <td className="p-3 font-semibold text-amber-600 dark:text-amber-400">{sub.facultyName || 'Unassigned'}</td>
                       <td className="p-3 text-slate-500">{sub.department}</td>
                       <td className="p-3 text-right space-x-2 whitespace-nowrap">
                         <button onClick={() => openEditModal(sub)} className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg"><Edit className="w-4 h-4" /></button>
@@ -1580,6 +1803,7 @@ export const AdminDashboard: React.FC<Props> = ({
                     <tr key={tt.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                       <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{tt.dayOfWeek}</td>
                       <td className="p-3 font-bold text-slate-900 dark:text-white">{tt.subjectCode} - {tt.subjectName}</td>
+                      <td className="p-3 font-semibold text-amber-600 dark:text-amber-400">{tt.facultyName || 'Unassigned'}</td>
                       <td className="p-3 text-slate-500">{tt.timeSlot} ({tt.roomNo})</td>
                       <td className="p-3 text-slate-500">{tt.department} • Sem {tt.semester} ({tt.section})</td>
                       <td className="p-3 text-right space-x-2 whitespace-nowrap">

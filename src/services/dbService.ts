@@ -156,16 +156,17 @@ export async function fetchCloudRecords<T>(entityType: string): Promise<T[] | nu
       .order('timestamp', { ascending: false });
 
     if (!syncError && syncData && Array.isArray(syncData)) {
+      const seenAuditIds = new Set<string>();
       for (const row of syncData) {
         try {
           if (row.details) {
             const parsed = JSON.parse(row.details) as T & { id: string };
             if (parsed && parsed.id) {
-              const existing = recordsMap.get(parsed.id);
-              if (!existing) {
-                recordsMap.set(parsed.id, parsed);
-              } else {
-                recordsMap.set(parsed.id, { ...existing, ...parsed });
+              if (!seenAuditIds.has(parsed.id)) {
+                seenAuditIds.add(parsed.id);
+                const existing = recordsMap.get(parsed.id);
+                // parsed is the newest audit log snapshot; it takes precedence over native table
+                recordsMap.set(parsed.id, { ...(existing || {}), ...parsed });
               }
             }
           }
@@ -190,17 +191,25 @@ export async function fetchStudentsFromDB(): Promise<Student[]> {
 
   if (cloudData !== null) {
     for (const d of cloudData) {
-      const roll = (d.roll_no || d.rollNo || d.id || '').trim();
-      studentMap.set(roll || d.id, {
+      const roll = (d.roll_no || d.rollNo || '').trim();
+      const id = (d.id || '').trim();
+      const key = roll || id;
+      if (!key) continue;
+
+      // Because cloudData has newest logs first, do not let older duplicate entries overwrite
+      if (roll && studentMap.has(roll)) continue;
+      if (id && studentMap.has(id)) continue;
+
+      studentMap.set(key, {
         id: d.id,
-        rollNo: roll,
+        rollNo: roll || d.id,
         name: d.name,
         email: d.email,
         phone: d.phone || d.student_phone || d.studentPhone || '',
         department: d.department || 'Department of Computer Science & Engineering',
-        year: d.year || '3rd Year',
-        semester: Number(d.semester || 5),
-        section: d.section || 'B',
+        year: d.year || '1st Year',
+        semester: Number(d.semester || 1),
+        section: d.section || 'A',
         parentId: d.parent_id || d.parentId,
         parentName: d.parent_name || d.parentName,
         parentPhone: d.parent_phone || d.parentPhone,
@@ -222,17 +231,26 @@ export async function fetchStudentsFromDB(): Promise<Student[]> {
       if (!error && Array.isArray(userStudents)) {
         for (const u of userStudents) {
           const roll = (u.roll || u.login_id || u.id || '').trim();
-          if (!studentMap.has(roll)) {
-            studentMap.set(roll, {
+          const existing = (roll ? studentMap.get(roll) : null) || studentMap.get(u.id);
+          if (existing) {
+            // Enrich missing fields without overwriting user edits
+            if (!existing.passwordHash && u.password_hash) {
+              existing.passwordHash = u.password_hash;
+            }
+            if (!existing.phone && u.phone) {
+              existing.phone = u.phone;
+            }
+          } else {
+            studentMap.set(roll || u.id, {
               id: u.id,
-              rollNo: roll,
+              rollNo: roll || u.id,
               name: u.name,
               email: u.email || `${roll}@college.edu`,
               phone: u.phone || '',
               department: u.dept_id === 'cse' ? 'Department of Computer Science & Engineering' : (u.dept_id || 'Department of Computer Science & Engineering'),
-              year: '3rd Year',
-              semester: 5,
-              section: 'B',
+              year: '1st Year',
+              semester: 1,
+              section: 'A',
               approvalStatus: 'approved',
               passwordHash: u.password_hash
             });
@@ -280,9 +298,19 @@ export async function saveStudentToDB(student: Student): Promise<boolean> {
     passwordHash: student.passwordHash || null
   });
 
-  // Dual-write to native users table
   const supabase = getSupabaseClient();
   if (supabase) {
+    // Delete any older competing audit logs for this roll number
+    if (student.rollNo) {
+      try {
+        await supabase.from('audit_logs').delete()
+          .eq('action', 'CLOUD_SYNC::students')
+          .neq('id', `SYNC_students_${student.id}`)
+          .ilike('details', `%"${student.rollNo}"%`);
+      } catch (e) {}
+    }
+
+    // Dual-write to native users table
     try {
       await supabase.from('users').upsert({
         id: student.id,
@@ -299,7 +327,7 @@ export async function saveStudentToDB(student: Student): Promise<boolean> {
   }
 
   const cached = await getCachedData<Student[]>(PREF_KEYS.STUDENTS, []);
-  const idx = cached.findIndex(s => s.id === student.id);
+  const idx = cached.findIndex(s => s.id === student.id || (student.rollNo && s.rollNo === student.rollNo));
   if (idx >= 0) cached[idx] = student;
   else cached.unshift(student);
   await setCachedData(PREF_KEYS.STUDENTS, cached);
@@ -389,10 +417,17 @@ export async function fetchFacultyFromDB(): Promise<Faculty[]> {
 
   if (cloudData !== null) {
     for (const d of cloudData) {
-      const code = (d.faculty_code || d.facultyCode || d.id || '').trim();
-      facultyMap.set(d.id, {
+      const code = (d.faculty_code || d.facultyCode || '').trim();
+      const id = (d.id || '').trim();
+      const key = id || code;
+      if (!key) continue;
+
+      if (id && facultyMap.has(id)) continue;
+      if (code && facultyMap.has(code)) continue;
+
+      facultyMap.set(key, {
         id: d.id,
-        facultyCode: code,
+        facultyCode: code || d.id,
         name: d.name,
         email: d.email,
         department: d.department || 'Department of Computer Science & Engineering',
@@ -415,11 +450,19 @@ export async function fetchFacultyFromDB(): Promise<Faculty[]> {
         .eq('role', 'staff');
       if (!error && Array.isArray(staffUsers)) {
         for (const u of staffUsers) {
-          if (!facultyMap.has(u.id)) {
-            const code = (u.faculty_code || u.login_id || u.id || '').trim();
+          const code = (u.faculty_code || u.login_id || u.id || '').trim();
+          const existing = facultyMap.get(u.id) || (code ? facultyMap.get(code) : null);
+          if (existing) {
+            if (!existing.passwordHash && u.password_hash) {
+              existing.passwordHash = u.password_hash;
+            }
+            if (!existing.phone && u.phone) {
+              existing.phone = u.phone;
+            }
+          } else {
             facultyMap.set(u.id, {
               id: u.id,
-              facultyCode: code,
+              facultyCode: code || u.id,
               name: u.name,
               email: u.email || `${u.id}@college.edu`,
               department: u.dept_id === 'cse' ? 'Department of Computer Science & Engineering' : (u.dept_id || 'Department of Computer Science & Engineering'),
@@ -464,9 +507,17 @@ export async function saveFacultyToDB(fac: Faculty): Promise<boolean> {
     passwordHash: fac.passwordHash || null
   });
 
-  // Dual-write to native users table
   const supabase = getSupabaseClient();
   if (supabase) {
+    if (fac.facultyCode) {
+      try {
+        await supabase.from('audit_logs').delete()
+          .eq('action', 'CLOUD_SYNC::faculty')
+          .neq('id', `SYNC_faculty_${fac.id}`)
+          .ilike('details', `%"${fac.facultyCode}"%`);
+      } catch (e) {}
+    }
+
     try {
       await supabase.from('users').upsert({
         id: fac.id,
@@ -482,7 +533,7 @@ export async function saveFacultyToDB(fac: Faculty): Promise<boolean> {
   }
 
   const cached = await getCachedData<Faculty[]>(PREF_KEYS.FACULTY, []);
-  const idx = cached.findIndex(f => f.id === fac.id);
+  const idx = cached.findIndex(f => f.id === fac.id || (fac.facultyCode && f.facultyCode === fac.facultyCode));
   if (idx >= 0) cached[idx] = fac;
   else cached.unshift(fac);
   await setCachedData(PREF_KEYS.FACULTY, cached);
@@ -565,16 +616,24 @@ export async function fetchSubjectsFromDB(): Promise<Subject[]> {
 
   if (cloudData !== null) {
     for (const d of cloudData) {
-      subjectMap.set(d.id, {
+      const code = (d.code || '').trim();
+      const id = (d.id || '').trim();
+      const key = id || code;
+      if (!key) continue;
+
+      if (id && subjectMap.has(id)) continue;
+      if (code && subjectMap.has(code)) continue;
+
+      subjectMap.set(key, {
         id: d.id,
         code: d.code,
         name: d.name,
         department: d.department || 'Department of Computer Science & Engineering',
-        semester: d.semester || 5,
+        semester: Number(d.semester || 5),
         type: d.type as any,
-        credits: d.credits || 3,
+        credits: Number(d.credits || 3),
         facultyId: d.faculty_id || d.facultyId || '',
-        facultyName: d.faculty_name || d.facultyName
+        facultyName: d.faculty_name || d.facultyName || ''
       });
     }
   }
@@ -586,7 +645,12 @@ export async function fetchSubjectsFromDB(): Promise<Subject[]> {
       const { data: courses, error } = await supabase.from('courses').select('*');
       if (!error && Array.isArray(courses)) {
         for (const c of courses) {
-          if (!subjectMap.has(c.id)) {
+          const existing = subjectMap.get(c.id) || (c.code ? subjectMap.get(c.code) : null);
+          if (existing) {
+            // Retain user edits; only fill missing code/name
+            if (!existing.code && c.code) existing.code = c.code;
+            if (!existing.name && c.name) existing.name = c.name;
+          } else {
             subjectMap.set(c.id, {
               id: c.id,
               code: c.code,
@@ -623,12 +687,22 @@ export async function saveSubjectToDB(subject: Subject): Promise<boolean> {
     type: subject.type,
     credits: subject.credits,
     faculty_id: subject.facultyId,
-    facultyId: subject.facultyId
+    facultyId: subject.facultyId,
+    faculty_name: subject.facultyName,
+    facultyName: subject.facultyName
   });
 
-  // Also upsert to native courses table in Supabase
   const supabase = getSupabaseClient();
   if (supabase) {
+    if (subject.code) {
+      try {
+        await supabase.from('audit_logs').delete()
+          .eq('action', 'CLOUD_SYNC::subjects')
+          .neq('id', `SYNC_subjects_${subject.id}`)
+          .ilike('details', `%"${subject.code}"%`);
+      } catch (e) {}
+    }
+
     try {
       await supabase.from('courses').upsert({
         id: subject.id,
@@ -641,7 +715,7 @@ export async function saveSubjectToDB(subject: Subject): Promise<boolean> {
   }
 
   const cached = await getCachedData<Subject[]>(PREF_KEYS.SUBJECTS, []);
-  const idx = cached.findIndex(s => s.id === subject.id);
+  const idx = cached.findIndex(s => s.id === subject.id || (subject.code && s.code === subject.code));
   if (idx >= 0) cached[idx] = subject;
   else cached.unshift(subject);
   await setCachedData(PREF_KEYS.SUBJECTS, cached);
@@ -736,6 +810,7 @@ export async function fetchTimetableFromDB(): Promise<TimetableSlot[]> {
 
   if (cloudData !== null) {
     for (const d of cloudData) {
+      if (!d.id || slotMap.has(d.id)) continue;
       slotMap.set(d.id, {
         id: d.id,
         dayOfWeek: d.day_of_week || d.dayOfWeek || d.day || 'Monday',
@@ -744,11 +819,11 @@ export async function fetchTimetableFromDB(): Promise<TimetableSlot[]> {
         subjectName: d.subject_name || d.subjectName || '',
         subjectCode: d.subject_code || d.subjectCode || '',
         subjectType: d.subject_type || d.subjectType || 'Lecture',
-        facultyId: d.faculty_id || d.facultyId || d.staff_id || 'FAC_MB',
+        facultyId: d.faculty_id || d.facultyId || d.staff_id || '',
         facultyName: d.faculty_name || d.facultyName || '',
         roomNo: d.room_no || d.roomNo || d.classroom || 'Hall - 2211',
         department: d.department || 'Department of Computer Science & Engineering',
-        semester: d.semester || 5,
+        semester: Number(d.semester || 5),
         section: d.section || 'B Batch'
       });
     }
@@ -801,8 +876,16 @@ export async function saveTimetableSlotToDB(slot: TimetableSlot): Promise<boolea
     timeSlot: slot.timeSlot,
     subject_id: slot.subjectId,
     subjectId: slot.subjectId,
+    subject_name: slot.subjectName,
+    subjectName: slot.subjectName,
+    subject_code: slot.subjectCode,
+    subjectCode: slot.subjectCode,
+    subject_type: slot.subjectType,
+    subjectType: slot.subjectType,
     faculty_id: slot.facultyId,
     facultyId: slot.facultyId,
+    faculty_name: slot.facultyName,
+    facultyName: slot.facultyName,
     room_no: slot.roomNo,
     roomNo: slot.roomNo,
     department: slot.department,
@@ -1220,11 +1303,12 @@ export async function addAuditLogDB(userId: string, userName: string, userRole: 
 // -------------------------------------------------------------
 export async function fetchParentsFromDB(): Promise<ParentRecord[]> {
   const supabase = getSupabaseClient();
-  let cloudParents: ParentRecord[] = [];
+  const parentMap = new Map<string, ParentRecord>();
 
   const cloudData = await fetchCloudRecords<any>('parents');
   if (cloudData !== null) {
-    cloudParents = cloudData.map((d: any) => {
+    for (const d of cloudData) {
+      if (!d.id || parentMap.has(d.id)) continue;
       let rollNos: string[] = [];
       if (Array.isArray(d.child_roll_nos || d.childRollNos)) {
         rollNos = (d.child_roll_nos || d.childRollNos).map((r: any) => String(r).trim()).filter(Boolean);
@@ -1236,7 +1320,7 @@ export async function fetchParentsFromDB(): Promise<ParentRecord[]> {
         rollNos.unshift(primary);
       }
 
-      return {
+      parentMap.set(d.id, {
         id: d.id,
         name: d.name,
         email: d.email || '',
@@ -1247,17 +1331,17 @@ export async function fetchParentsFromDB(): Promise<ParentRecord[]> {
         address: d.address || '',
         passwordHash: d.password_hash || d.passwordHash,
         createdAt: d.created_at || d.createdAt
-      };
-    });
+      });
+    }
   }
 
   // Also query users table for role='parent' to enrich passwords or missing parents
   if (supabase) {
     try {
       const { data: userParents } = await supabase.from('users').select('*').eq('role', 'parent');
-      if (userParents && userParents.length > 0) {
+      if (userParents && Array.isArray(userParents)) {
         for (const u of userParents) {
-          const existing = cloudParents.find(p => p.id === u.id || (u.email && p.email?.toLowerCase() === u.email.toLowerCase()));
+          const existing = parentMap.get(u.id) || Array.from(parentMap.values()).find(p => (u.email && p.email?.toLowerCase() === u.email.toLowerCase()) || (u.phone && p.phone === u.phone));
           if (existing) {
             if (!existing.passwordHash && u.password_hash) {
               existing.passwordHash = u.password_hash;
@@ -1266,13 +1350,14 @@ export async function fetchParentsFromDB(): Promise<ParentRecord[]> {
               existing.phone = u.phone;
             }
           } else {
-            cloudParents.push({
+            parentMap.set(u.id, {
               id: u.id,
               name: u.name || 'Ward Parent',
               email: u.email || '',
               phone: u.phone || '',
               childRollNo: '',
               childRollNos: [],
+              childName: '',
               address: '',
               passwordHash: u.password_hash,
               createdAt: u.created_at
@@ -1285,12 +1370,13 @@ export async function fetchParentsFromDB(): Promise<ParentRecord[]> {
     }
   }
 
-  if (cloudData !== null || cloudParents.length > 0) {
-    await setCachedData(PREF_KEYS.PARENTS, cloudParents);
-    return cloudParents;
+  let cloudParents = Array.from(parentMap.values());
+  if (cloudData === null && cloudParents.length === 0) {
+    cloudParents = await getCachedData<ParentRecord[]>(PREF_KEYS.PARENTS, INITIAL_PARENTS);
   }
 
-  return getCachedData<ParentRecord[]>(PREF_KEYS.PARENTS, INITIAL_PARENTS);
+  await setCachedData(PREF_KEYS.PARENTS, cloudParents);
+  return cloudParents;
 }
 
 export async function saveParentToDB(parent: ParentRecord): Promise<boolean> {
@@ -1316,9 +1402,15 @@ export async function saveParentToDB(parent: ParentRecord): Promise<boolean> {
     createdAt: parent.createdAt || new Date().toISOString()
   });
 
-  // Also dual-write / upsert into `users` table for parent authentication
   const supabase = getSupabaseClient();
   if (supabase) {
+    try {
+      await supabase.from('audit_logs').delete()
+        .eq('action', 'CLOUD_SYNC::parents')
+        .neq('id', `SYNC_parents_${parent.id}`)
+        .or(`details.ilike.%"${parent.phone}"%,details.ilike.%"${parent.id}"%`);
+    } catch (e) {}
+
     try {
       const loginId = parent.phone || parent.email || `PAR_${primaryChild || parent.id}`;
       await supabase.from('users').upsert({
@@ -1329,7 +1421,7 @@ export async function saveParentToDB(parent: ParentRecord): Promise<boolean> {
         phone: parent.phone || '',
         role: 'parent',
         password_hash: parent.passwordHash || null,
-        department: 'General'
+        dept_id: 'cse'
       }, { onConflict: 'id' });
     } catch (err) {
       console.warn('Dual-write to users table for parent skipped/failed:', err);
@@ -1337,7 +1429,7 @@ export async function saveParentToDB(parent: ParentRecord): Promise<boolean> {
   }
 
   const cached = await getCachedData<ParentRecord[]>(PREF_KEYS.PARENTS, []);
-  const idx = cached.findIndex(p => p.id === parent.id);
+  const idx = cached.findIndex(p => p.id === parent.id || (parent.phone && p.phone === parent.phone));
   if (idx >= 0) cached[idx] = parent;
   else cached.unshift(parent);
   await setCachedData(PREF_KEYS.PARENTS, cached);
