@@ -2,7 +2,7 @@ import { User, Role, Student, Faculty, ParentRecord } from '../types';
 import {
   fetchStudentsFromDB, fetchFacultyFromDB, fetchRegistrationRequestsFromDB,
   saveStudentToDB, saveFacultyToDB, saveParentToDB, fetchParentsFromDB,
-  saveCloudRecord, fetchCloudRecords
+  saveCloudRecord, fetchCloudRecords, fetchAdminProfileFromDB
 } from './dbService';
 import { Preferences } from '@capacitor/preferences';
 import { getSupabaseClient } from './supabaseClient';
@@ -75,10 +75,11 @@ export async function loginUser(emailOrId: string, passwordInput: string, role: 
         return { success: false, message: 'Incorrect Admin password. Please check your credentials.' };
       }
 
+      const adminProfile = await fetchAdminProfileFromDB();
       const adminUser: User = {
         id: 'usr_admin1',
-        name: 'Dr. M. Balasubramanian',
-        email: 'admin@college.edu',
+        name: adminProfile.name || 'CSADMIN',
+        email: adminProfile.email || 'admin@college.edu',
         role: 'admin',
         department: 'Department of Computer Science & Engineering',
         avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
@@ -270,14 +271,16 @@ export async function loginUser(emailOrId: string, passwordInput: string, role: 
     const parentFound = parents.find(p => p.email?.toLowerCase() === input || (p.phone && p.phone.includes(input)));
     
     const students = await fetchStudentsFromDB();
-    const childMatches = students.filter(s =>
-      s.email.toLowerCase().includes(input) ||
-      (s.parentPhone && s.parentPhone.includes(input)) ||
-      (parentFound && (
-        (parentFound.childRollNo && parentFound.childRollNo.toLowerCase() === s.rollNo.toLowerCase()) ||
-        (parentFound.childRollNos && parentFound.childRollNos.map(r => r.toLowerCase()).includes(s.rollNo.toLowerCase()))
-      ))
-    );
+    const childMatches = students.filter(s => {
+      if (parentFound) {
+        if (parentFound.childRollNos && parentFound.childRollNos.some(r => r.toLowerCase() === s.rollNo.toLowerCase())) return true;
+        if (parentFound.childRollNo && parentFound.childRollNo.toLowerCase() === s.rollNo.toLowerCase()) return true;
+        if (s.parentId && s.parentId === parentFound.id) return true;
+        if (parentFound.phone && s.parentPhone && s.parentPhone.includes(parentFound.phone)) return true;
+      }
+      if (s.parentPhone && s.parentPhone.includes(input)) return true;
+      return false;
+    });
 
     if (childMatches.length === 0 && !parentFound) {
       return { success: false, message: 'No registered student profile linked with this parent phone / email.' };
@@ -288,11 +291,12 @@ export async function loginUser(emailOrId: string, passwordInput: string, role: 
     }
 
     const parentUser: User = {
-      id: parentFound ? parentFound.id : 'usr_parent_main',
+      id: parentFound ? parentFound.id : `usr_parent_${Date.now()}`,
       name: parentFound ? parentFound.name : 'Ward Parent Gateway',
-      email: input.includes('@') ? input : 'parent@gmail.com',
+      email: parentFound?.email || (input.includes('@') ? input : 'parent@gmail.com'),
+      phone: parentFound?.phone || input,
       role: 'parent',
-      parentId: parentFound ? parentFound.id : 'PAR301',
+      parentId: parentFound ? parentFound.id : undefined,
       childStudentIds: childMatches.map(c => c.id),
       approvalStatus: 'approved'
     };

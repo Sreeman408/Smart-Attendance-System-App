@@ -3,7 +3,7 @@ import { User, Student, Faculty, Subject, TimetableSlot, AttendanceRecord, Leave
 export const INITIAL_USERS: User[] = [
   {
     id: 'usr_admin1',
-    name: 'Dr. M. Balasubramanian',
+    name: 'CSADMIN',
     email: 'admin@college.edu',
     role: 'admin',
     avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',

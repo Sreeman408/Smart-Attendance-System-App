@@ -29,7 +29,8 @@ const PREF_KEYS = {
   SATURDAY_CONFIG: 'au_cms_clean_v10_saturday_config',
   REGISTRATIONS: 'au_cms_clean_v10_registrations',
   PARENTS: 'au_cms_clean_v10_parents',
-  DEPARTMENTS: 'au_cms_clean_v10_departments'
+  DEPARTMENTS: 'au_cms_clean_v10_departments',
+  ADMIN_PROFILE: 'au_cms_clean_v10_admin_profile'
 };
 
 // Helper for robust native Preferences & Web localStorage dual-caching
@@ -388,6 +389,39 @@ export async function deleteStudentFromDB(idOrRoll: string): Promise<DeleteResul
     try {
       await supabase.from('registration_requests').delete().or(`roll_no.eq.${targetRoll},email.eq.${student?.email || ''}`);
     } catch (e) {}
+
+    // 4b. Cascade unlinking from parents
+    try {
+      const allParents = await fetchParentsFromDB();
+      for (const par of allParents) {
+        let changed = false;
+        let rollNos = Array.isArray(par.childRollNos) ? [...par.childRollNos] : [];
+        if (targetRoll && rollNos.some(r => r.toLowerCase() === targetRoll.toLowerCase())) {
+          rollNos = rollNos.filter(r => r.toLowerCase() !== targetRoll.toLowerCase());
+          changed = true;
+        }
+        if (targetId && rollNos.some(r => r.toLowerCase() === targetId.toLowerCase())) {
+          rollNos = rollNos.filter(r => r.toLowerCase() !== targetId.toLowerCase());
+          changed = true;
+        }
+        let primary = par.childRollNo;
+        if (targetRoll && primary && primary.toLowerCase() === targetRoll.toLowerCase()) {
+          primary = rollNos[0] || '';
+          changed = true;
+        }
+        if (targetId && primary && primary.toLowerCase() === targetId.toLowerCase()) {
+          primary = rollNos[0] || '';
+          changed = true;
+        }
+        if (changed) {
+          par.childRollNos = rollNos;
+          par.childRollNo = primary;
+          await saveParentToDB(par);
+        }
+      }
+    } catch (e) {
+      console.warn('Error unlinking deleted student from parents:', e);
+    }
 
     // 5. Update local cache (Preferences & localStorage)
     const updatedStudents = cached.filter(s => s.id !== targetId && s.rollNo !== targetRoll);
@@ -1434,6 +1468,33 @@ export async function saveParentToDB(parent: ParentRecord): Promise<boolean> {
   else cached.unshift(parent);
   await setCachedData(PREF_KEYS.PARENTS, cached);
 
+  // Bidirectionally update students linked to this parent
+  try {
+    const cachedStudents = await getCachedData<Student[]>(PREF_KEYS.STUDENTS, []);
+    let studentsModified = false;
+    for (const st of cachedStudents) {
+      const isLinked = childRollNos.some(r => r.toLowerCase() === st.rollNo.toLowerCase() || r === st.id);
+      if (isLinked) {
+        if (st.parentId !== parent.id || st.parentPhone !== parent.phone || st.parentName !== parent.name) {
+          st.parentId = parent.id;
+          st.parentPhone = parent.phone;
+          st.parentName = parent.name;
+          studentsModified = true;
+          saveStudentToDB(st).catch(() => {});
+        }
+      } else if (st.parentId === parent.id) {
+        delete st.parentId;
+        studentsModified = true;
+        saveStudentToDB(st).catch(() => {});
+      }
+    }
+    if (studentsModified) {
+      await setCachedData(PREF_KEYS.STUDENTS, cachedStudents);
+    }
+  } catch (e) {
+    console.warn('Bidirectional student link update failed:', e);
+  }
+
   return cloudOk;
 }
 
@@ -1527,5 +1588,80 @@ export async function deleteDepartmentFromDB(id: string): Promise<DeleteResult> 
     console.error('Error deleting department:', err);
     return { success: false, message: `Failed to delete department: ${err?.message || 'Network error'}` };
   }
+}
+
+// -------------------------------------------------------------
+// 11. ADMIN PROFILE SERVICE (CSADMIN DEFAULT & DYNAMIC EDIT)
+// -------------------------------------------------------------
+export interface AdminProfile {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export async function fetchAdminProfileFromDB(): Promise<AdminProfile> {
+  const defaultProfile: AdminProfile = {
+    id: 'usr_admin1',
+    name: 'CSADMIN',
+    email: 'admin@college.edu'
+  };
+
+  const cloudRecords = await fetchCloudRecords<any>('admin_profile');
+  if (cloudRecords && cloudRecords.length > 0 && cloudRecords[0].name) {
+    const p: AdminProfile = {
+      id: cloudRecords[0].id || 'usr_admin1',
+      name: cloudRecords[0].name,
+      email: cloudRecords[0].email || 'admin@college.edu'
+    };
+    await setCachedData(PREF_KEYS.ADMIN_PROFILE, p);
+    return p;
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data } = await supabase.from('users').select('*').eq('role', 'admin').eq('id', 'usr_admin1').maybeSingle();
+      if (data && data.name) {
+        const p: AdminProfile = {
+          id: data.id,
+          name: data.name,
+          email: data.email || 'admin@college.edu'
+        };
+        await setCachedData(PREF_KEYS.ADMIN_PROFILE, p);
+        return p;
+      }
+    } catch (e) {}
+  }
+
+  return getCachedData<AdminProfile>(PREF_KEYS.ADMIN_PROFILE, defaultProfile);
+}
+
+export async function saveAdminProfileToDB(name: string, email: string = 'admin@college.edu'): Promise<boolean> {
+  const profile: AdminProfile = {
+    id: 'usr_admin1',
+    name: name.trim() || 'CSADMIN',
+    email: email.trim() || 'admin@college.edu'
+  };
+
+  const cloudOk = await saveCloudRecord('admin_profile', profile);
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('users').upsert({
+        id: 'usr_admin1',
+        login_id: 'admin',
+        name: profile.name,
+        email: profile.email,
+        role: 'admin',
+        dept_id: 'cse'
+      }, { onConflict: 'id' });
+    } catch (e) {
+      console.warn('Dual-write admin profile to users table failed:', e);
+    }
+  }
+
+  await setCachedData(PREF_KEYS.ADMIN_PROFILE, profile);
+  return cloudOk;
 }
 

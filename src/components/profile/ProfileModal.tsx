@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User } from '../../types';
 import { generateVerificationOTP, verifyOTPCode, saveActiveSession } from '../../services/authService';
-import { saveStudentToDB, saveFacultyToDB } from '../../services/dbService';
+import { saveStudentToDB, saveFacultyToDB, saveAdminProfileToDB } from '../../services/dbService';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { X, Mail, ShieldCheck, CheckCircle, AlertCircle, Edit3, User as UserIcon, Building2, Phone, KeyRound } from 'lucide-react';
 
@@ -18,6 +18,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   currentUser,
   onUserUpdated
 }) => {
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newName, setNewName] = useState(currentUser.name || '');
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [newEmail, setNewEmail] = useState(currentUser.email || '');
@@ -28,6 +30,52 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [successMsg, setSuccessMsg] = useState('');
 
   if (!isOpen) return null;
+
+  const handleSaveName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      setErrorMsg('Name cannot be empty.');
+      return;
+    }
+
+    const updatedUser: User = { ...currentUser, name: trimmed };
+    await saveActiveSession(updatedUser);
+
+    if (currentUser.role === 'admin') {
+      await saveAdminProfileToDB(trimmed, currentUser.email);
+    } else if (currentUser.role === 'student' && currentUser.studentId) {
+      await saveStudentToDB({
+        id: currentUser.studentId,
+        name: trimmed,
+        email: currentUser.email || '',
+        rollNo: '24CS01',
+        department: currentUser.department || 'Computer Science',
+        year: '2nd Year',
+        semester: 4,
+        section: 'A',
+        approvalStatus: 'approved'
+      });
+    } else if (currentUser.role === 'faculty' && currentUser.facultyId) {
+      await saveFacultyToDB({
+        id: currentUser.facultyId,
+        facultyCode: 'FAC101',
+        name: trimmed,
+        email: currentUser.email || '',
+        department: currentUser.department || 'Computer Science',
+        designation: 'Associate Professor',
+        phone: currentUser.phone || '',
+        subjectsHandled: [],
+        approvalStatus: 'approved'
+      });
+    }
+
+    onUserUpdated(updatedUser);
+    setSuccessMsg('Name updated successfully!');
+    setIsEditingName(false);
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
 
   const handleStartEmailUpdate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,9 +181,48 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   <span className="font-bold uppercase text-amber-600 dark:text-amber-400">{currentUser.role}</span>
                 </div>
 
-                <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700">
-                  <span className="text-slate-500 font-semibold">Department</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">{currentUser.department || 'Computer Science'}</span>
+                <div className="pb-2 border-b border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-slate-500 font-semibold">Display Name</span>
+                    {!isEditingName && (
+                      <button
+                        onClick={() => { setIsEditingName(true); setNewName(currentUser.name); }}
+                        className="text-amber-600 dark:text-amber-400 font-bold hover:underline flex items-center gap-1 text-[11px]"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        Edit Name
+                      </button>
+                    )}
+                  </div>
+                  {!isEditingName ? (
+                    <span className="font-bold text-slate-900 dark:text-white block text-sm">{currentUser.name}</span>
+                  ) : (
+                    <form onSubmit={handleSaveName} className="space-y-2 mt-2">
+                      <input
+                        type="text"
+                        required
+                        value={newName}
+                        onChange={e => setNewName(e.target.value)}
+                        placeholder="Enter name (e.g. CSADMIN or custom name)"
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingName(false)}
+                          className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-xs font-bold rounded-lg"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-3 py-1.5 bg-amber-500 text-slate-950 text-xs font-bold rounded-lg shadow-sm"
+                        >
+                          Save Name
+                        </button>
+                      </div>
+                    </form>
+                  )}
                 </div>
 
                 <div>

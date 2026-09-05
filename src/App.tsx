@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Role, User, Student, Faculty, Subject, TimetableSlot, AttendanceRecord, LeaveRequest, RegistrationRequest } from './types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Role, User, Student, Faculty, Subject, TimetableSlot, AttendanceRecord, LeaveRequest, RegistrationRequest, ParentRecord } from './types';
 import { getStoredActiveSession, clearActiveSession } from './services/authService';
 import {
   fetchStudentsFromDB, fetchFacultyFromDB, fetchSubjectsFromDB,
   fetchTimetableFromDB, fetchAttendanceRecordsFromDB, fetchLeavesFromDB,
-  fetchRegistrationRequestsFromDB
+  fetchRegistrationRequestsFromDB, fetchParentsFromDB, fetchAdminProfileFromDB
 } from './services/dbService';
 import { LoginGateway } from './components/auth/LoginGateway';
 import { Header } from './components/layout/Header';
@@ -29,7 +29,8 @@ export default function App() {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [registrations, setRegistrations] = useState<RegistrationRequest[]>([]);
-  const [selectedChildId, setSelectedChildId] = useState<string>('STU202401');
+  const [parents, setParents] = useState<ParentRecord[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string>('');
 
   // Load session & DB data on mount
   useEffect(() => {
@@ -37,6 +38,14 @@ export default function App() {
       setLoadingSession(true);
       const session = await getStoredActiveSession();
       if (session) {
+        if (session.role === 'admin') {
+          try {
+            const adminProf = await fetchAdminProfileFromDB();
+            if (adminProf.name) {
+              session.name = adminProf.name;
+            }
+          } catch (e) {}
+        }
         setCurrentUser(session);
         setActiveRole(session.role);
         setDefaultTabForRole(session.role);
@@ -55,6 +64,7 @@ export default function App() {
     const atts = await fetchAttendanceRecordsFromDB();
     const lvs = await fetchLeavesFromDB();
     const regs = await fetchRegistrationRequestsFromDB();
+    const pars = await fetchParentsFromDB();
 
     setStudents(stus);
     setFaculty(facs);
@@ -63,7 +73,7 @@ export default function App() {
     setAttendanceRecords(atts);
     setLeaves(lvs);
     setRegistrations(regs);
-    if (stus.length > 0) setSelectedChildId(stus[0].id);
+    setParents(pars);
   };
 
   const setDefaultTabForRole = (role: Role) => {
@@ -116,6 +126,50 @@ export default function App() {
   // Security Check: If non-admin user somehow gets mismatched activeRole, force back to currentUser.role
   const effectiveRole = currentUser.role === 'admin' ? activeRole : currentUser.role;
 
+  // Resolve linked students strictly for the logged-in parent
+  const linkedStudents = useMemo(() => {
+    if (!currentUser || effectiveRole !== 'parent') return [];
+    const parentMatch = parents.find(p =>
+      (currentUser.parentId && p.id === currentUser.parentId) ||
+      p.id === currentUser.id ||
+      (currentUser.email && p.email && p.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+      (currentUser.phone && p.phone && (p.phone === currentUser.phone || currentUser.phone.includes(p.phone) || p.phone.includes(currentUser.phone)))
+    );
+
+    const childRolls: string[] = [];
+    if (parentMatch) {
+      if (Array.isArray(parentMatch.childRollNos)) {
+        childRolls.push(...parentMatch.childRollNos.map(r => r.toLowerCase()));
+      }
+      if (parentMatch.childRollNo) {
+        childRolls.push(parentMatch.childRollNo.toLowerCase());
+      }
+    }
+
+    return students.filter(s => {
+      if (currentUser.childStudentIds && currentUser.childStudentIds.includes(s.id)) return true;
+      if (childRolls.includes(s.rollNo.toLowerCase()) || childRolls.includes(s.id.toLowerCase())) return true;
+      if (parentMatch && s.parentId && s.parentId === parentMatch.id) return true;
+      if (parentMatch && parentMatch.phone && s.parentPhone && s.parentPhone.includes(parentMatch.phone)) return true;
+      return false;
+    });
+  }, [currentUser, effectiveRole, parents, students]);
+
+  // Keep selectedChildId synchronized with linked students
+  useEffect(() => {
+    if (effectiveRole === 'parent') {
+      if (linkedStudents.length > 0) {
+        if (!selectedChildId || !linkedStudents.some(s => s.id === selectedChildId)) {
+          setSelectedChildId(linkedStudents[0].id);
+        }
+      } else {
+        setSelectedChildId('');
+      }
+    } else if (students.length > 0 && !selectedChildId) {
+      setSelectedChildId(students[0].id);
+    }
+  }, [effectiveRole, linkedStudents, selectedChildId, students]);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors selection:bg-amber-500 selection:text-slate-950">
       
@@ -128,7 +182,7 @@ export default function App() {
         onLogout={handleLogout}
         selectedChildId={selectedChildId}
         onSelectChild={setSelectedChildId}
-        studentsList={students}
+        studentsList={effectiveRole === 'parent' ? linkedStudents : students}
       />
 
       {/* Body Layout: Desktop Sidebar + Main Content */}
@@ -180,7 +234,7 @@ export default function App() {
           {effectiveRole === 'parent' && (
             <ParentDashboard
               parentUser={currentUser}
-              students={students}
+              students={linkedStudents}
               subjects={subjects}
               faculty={faculty}
               attendanceRecords={attendanceRecords}

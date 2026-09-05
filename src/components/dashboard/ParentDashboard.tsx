@@ -33,11 +33,31 @@ export const ParentDashboard: React.FC<Props> = ({
   const currentChild = students.find(s => s.id === selectedChildId) || students[0];
 
   if (!currentChild) {
-    return <div className="p-8 text-center text-slate-500 font-bold">No linked child profile found.</div>;
+    return (
+      <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3 max-w-lg mx-auto my-12 shadow-sm animate-fade-in">
+        <div className="w-14 h-14 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center mx-auto border border-amber-500/20">
+          <HeartHandshake className="w-7 h-7" />
+        </div>
+        <h3 className="text-lg font-bold text-slate-900 dark:text-white">No Linked Student Profile</h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+          Your parent account is active, but no student records are currently linked to your phone or email. Please request the college administration to link your ward&apos;s Roll Number from the Admin Portal.
+        </p>
+      </div>
+    );
   }
 
   const childAtts = attendanceRecords.filter(a => a.studentId === currentChild.id);
   const summary = calculateOverallAttendance(childAtts, subjects);
+
+  // Filter timetable for current child's department and semester
+  const childTimetable = timetable.filter(slot => {
+    const semMatch = !slot.semester || Number(slot.semester) === Number(currentChild.semester);
+    const deptMatch = !slot.department ||
+      slot.department.toLowerCase().includes(currentChild.department.toLowerCase()) ||
+      currentChild.department.toLowerCase().includes(slot.department.toLowerCase());
+    return semMatch && deptMatch;
+  });
+  const displayTimetable = childTimetable.length > 0 ? childTimetable : timetable;
 
   // 1. Faculty Contact Directory Tab
   if (activeTab === 'faculty') {
@@ -116,7 +136,7 @@ export const ParentDashboard: React.FC<Props> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {timetable.map(slot => (
+            {displayTimetable.map(slot => (
               <div key={slot.id} className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-amber-500/20 text-amber-700 dark:text-amber-400 rounded-md">

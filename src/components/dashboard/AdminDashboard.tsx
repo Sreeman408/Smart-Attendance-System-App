@@ -1399,78 +1399,168 @@ export const AdminDashboard: React.FC<Props> = ({
                   </div>
                 )}
 
-                {crudTab === 'parents' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Parent Name *</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Parent Full Name"
-                        value={formData.name || ''}
-                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                      />
+                {crudTab === 'parents' && (() => {
+                  const currentRolls: string[] = Array.isArray(formData.childRollNos)
+                    ? formData.childRollNos
+                    : (typeof formData.childRollNos === 'string' && formData.childRollNos.trim()
+                        ? formData.childRollNos.split(',').map((s: string) => s.trim()).filter(Boolean)
+                        : (formData.childRollNo ? [formData.childRollNo.trim()] : []));
+
+                  const handleAddStudent = (roll: string) => {
+                    if (!roll) return;
+                    if (!currentRolls.includes(roll)) {
+                      const updated = [...currentRolls, roll];
+                      setFormData({
+                        ...formData,
+                        childRollNos: updated.join(', '),
+                        childRollNo: updated[0] || ''
+                      });
+                    }
+                  };
+
+                  const handleRemoveStudent = (rollToRemove: string) => {
+                    const updated = currentRolls.filter(r => r.toLowerCase() !== rollToRemove.toLowerCase());
+                    setFormData({
+                      ...formData,
+                      childRollNos: updated.join(', '),
+                      childRollNo: updated[0] || ''
+                    });
+                  };
+
+                  return (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Parent Name *</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Parent Full Name"
+                            value={formData.name || ''}
+                            onChange={e => setFormData({ ...formData, name: e.target.value })}
+                            className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Phone Number *</label>
+                          <input
+                            type="tel"
+                            required
+                            placeholder="e.g. +91 9876543210"
+                            value={formData.phone || ''}
+                            onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                            className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Email Address</label>
+                          <input
+                            type="email"
+                            placeholder="parent@gmail.com"
+                            value={formData.email || ''}
+                            onChange={e => setFormData({ ...formData, email: e.target.value })}
+                            className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                            {modalMode === 'edit' ? 'Password (leave blank to keep)' : 'Password *'}
+                          </label>
+                          <input
+                            type="password"
+                            required={modalMode === 'add'}
+                            placeholder={modalMode === 'edit' ? 'Leave blank to retain current' : 'Create password'}
+                            value={formData.password || ''}
+                            onChange={e => setFormData({ ...formData, password: e.target.value })}
+                            className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                          />
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Residential Address</label>
+                          <input
+                            type="text"
+                            placeholder="Street, City, Pin Code"
+                            value={formData.address || ''}
+                            onChange={e => setFormData({ ...formData, address: e.target.value })}
+                            className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Interactive Student Linkage Selector */}
+                      <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                            Linked Students ({currentRolls.length} Selected)
+                          </label>
+                          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
+                            Multi-child linking supported
+                          </span>
+                        </div>
+
+                        {/* Student Dropdown Picker */}
+                        <div className="flex gap-2">
+                          <select
+                            onChange={e => {
+                              handleAddStudent(e.target.value);
+                              e.target.value = '';
+                            }}
+                            defaultValue=""
+                            className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-medium"
+                          >
+                            <option value="">+ Select a student to link...</option>
+                            {sortedStudents.map(st => (
+                              <option key={st.id} value={st.rollNo} disabled={currentRolls.includes(st.rollNo)}>
+                                {st.rollNo} - {st.name} ({st.department}, Sem {st.semester})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Selected Student Badges */}
+                        {currentRolls.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {currentRolls.map(roll => {
+                              const match = students.find(s => s.rollNo.toLowerCase() === roll.toLowerCase());
+                              return (
+                                <span
+                                  key={roll}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/15 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700/60 rounded-lg text-xs font-bold"
+                                >
+                                  <span>{roll} {match ? `• ${match.name}` : ''}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveStudent(roll)}
+                                    className="p-0.5 hover:bg-amber-500/30 rounded text-amber-800 dark:text-amber-300 hover:text-red-600 dark:hover:text-red-400"
+                                    title="Remove student link"
+                                  >
+                                    ✕
+                                  </button>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-slate-400 italic">No students selected yet. Choose from the list above or enter roll numbers below.</p>
+                        )}
+
+                        {/* Fallback Manual Comma-Separated Input */}
+                        <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60">
+                          <label className="block text-[10px] font-semibold text-slate-500 mb-1">
+                            Or enter Roll Numbers manually (comma-separated):
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 2436010091, 2436010094"
+                            value={typeof formData.childRollNos === 'string' ? formData.childRollNos : currentRolls.join(', ')}
+                            onChange={e => setFormData({ ...formData, childRollNos: e.target.value })}
+                            className="w-full px-3 py-1.5 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Phone Number *</label>
-                      <input
-                        type="tel"
-                        required
-                        placeholder="e.g. +91 9876543210"
-                        value={formData.phone || ''}
-                        onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Email Address</label>
-                      <input
-                        type="email"
-                        placeholder="parent@gmail.com"
-                        value={formData.email || ''}
-                        onChange={e => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                        Linked Student Roll No(s) * (multi-child)
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. 22CSPC501, 22CSPC502"
-                        value={formData.childRollNos || ''}
-                        onChange={e => setFormData({ ...formData, childRollNos: e.target.value })}
-                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                        {modalMode === 'edit' ? 'Password (leave blank to keep)' : 'Password *'}
-                      </label>
-                      <input
-                        type="password"
-                        required={modalMode === 'add'}
-                        placeholder={modalMode === 'edit' ? 'Leave blank to retain current' : 'Create password'}
-                        value={formData.password || ''}
-                        onChange={e => setFormData({ ...formData, password: e.target.value })}
-                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Residential Address</label>
-                      <input
-                        type="text"
-                        placeholder="Street, City, Pin Code"
-                        value={formData.address || ''}
-                        onChange={e => setFormData({ ...formData, address: e.target.value })}
-                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                      />
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {crudTab === 'timetable' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
