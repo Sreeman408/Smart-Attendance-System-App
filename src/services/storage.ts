@@ -54,38 +54,13 @@ function setItem<T>(key: string, value: T): void {
 
 // Initialize seed data if empty
 export function initLocalStorage(): void {
-  if (!localStorage.getItem(KEYS.USERS)) {
-    setItem(KEYS.USERS, INITIAL_USERS);
-  }
-  if (!localStorage.getItem(KEYS.STUDENTS)) {
-    setItem(KEYS.STUDENTS, INITIAL_STUDENTS);
-  }
-  if (!localStorage.getItem(KEYS.FACULTY)) {
-    setItem(KEYS.FACULTY, INITIAL_FACULTY);
-  }
-  if (!localStorage.getItem(KEYS.SUBJECTS)) {
-    setItem(KEYS.SUBJECTS, INITIAL_SUBJECTS);
-  }
-  if (!localStorage.getItem(KEYS.TIMETABLE)) {
-    setItem(KEYS.TIMETABLE, INITIAL_TIMETABLE);
-  }
-  if (!localStorage.getItem(KEYS.ATTENDANCE)) {
-    setItem(KEYS.ATTENDANCE, generateSeedAttendance());
-  }
-  if (!localStorage.getItem(KEYS.LEAVES)) {
-    setItem(KEYS.LEAVES, INITIAL_LEAVES);
-  }
-  if (!localStorage.getItem(KEYS.LOGS)) {
-    setItem(KEYS.LOGS, INITIAL_AUDIT_LOGS);
-  }
-  if (!localStorage.getItem(KEYS.CURRENT_USER)) {
-    setItem(KEYS.CURRENT_USER, INITIAL_USERS[0]); // Default to Admin
-  }
+  // Do not seed demo users, students, or faculty.
+  // Do not auto-login as Admin on startup.
 }
 
 // User & Auth operations
-export function getCurrentUser(): User {
-  return getItem<User>(KEYS.CURRENT_USER, INITIAL_USERS[0]);
+export function getCurrentUser(): User | null {
+  return getItem<User | null>(KEYS.CURRENT_USER, null as any);
 }
 
 export function setCurrentUser(user: User): void {
@@ -181,14 +156,14 @@ export function getAuditLogs(): AuditLog[] {
   return getItem<AuditLog[]>(KEYS.LOGS, INITIAL_AUDIT_LOGS);
 }
 
-export function logAuditAction(user: User, action: string, details: string): void {
+export function logAuditAction(user: User | null, action: string, details: string): void {
   const logs = getAuditLogs();
   logs.unshift({
     id: `log_${Date.now()}`,
     timestamp: new Date().toISOString(),
-    userId: user.id,
-    userName: user.name,
-    userRole: user.role,
+    userId: user?.id || 'sys',
+    userName: user?.name || 'System User',
+    userRole: user?.role || 'student',
     action,
     details
   });

@@ -4,6 +4,11 @@ import {
   LeaveRequest, AuditLog, SaturdayConfig, RegistrationRequest, ApprovalStatus,
   ParentRecord, Department
 } from '../types';
+
+export interface DeleteResult {
+  success: boolean;
+  message: string;
+}
 import {
   INITIAL_STUDENTS, INITIAL_FACULTY, INITIAL_SUBJECTS,
   INITIAL_TIMETABLE, generateSeedAttendance, INITIAL_LEAVES, INITIAL_AUDIT_LOGS,
@@ -238,7 +243,7 @@ export async function fetchStudentsFromDB(): Promise<Student[]> {
   }
 
   let resultList = Array.from(studentMap.values());
-  if (resultList.length === 0) {
+  if (cloudData === null && resultList.length === 0) {
     resultList = await getCachedData<Student[]>(PREF_KEYS.STUDENTS, INITIAL_STUDENTS);
   }
 
@@ -272,6 +277,23 @@ export async function saveStudentToDB(student: Student): Promise<boolean> {
     passwordHash: student.passwordHash || null
   });
 
+  // Dual-write to native users table
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('users').upsert({
+        id: student.id,
+        name: student.name,
+        email: student.email,
+        role: 'student',
+        dept_id: 'cse',
+        roll: student.rollNo,
+        login_id: student.rollNo,
+        password_hash: student.passwordHash || 'student123'
+      });
+    } catch (e) {}
+  }
+
   const cached = await getCachedData<Student[]>(PREF_KEYS.STUDENTS, []);
   const idx = cached.findIndex(s => s.id === student.id);
   if (idx >= 0) cached[idx] = student;
@@ -281,12 +303,77 @@ export async function saveStudentToDB(student: Student): Promise<boolean> {
   return cloudOk;
 }
 
-export async function deleteStudentFromDB(id: string): Promise<boolean> {
-  await deleteCloudRecord('students', id);
-  const cached = await getCachedData<Student[]>(PREF_KEYS.STUDENTS, []);
-  const updated = cached.filter(s => s.id !== id);
-  await setCachedData(PREF_KEYS.STUDENTS, updated);
-  return true;
+export async function deleteStudentFromDB(idOrRoll: string): Promise<DeleteResult> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { success: false, message: 'Supabase cloud database is unreachable. Cannot delete.' };
+  }
+
+  try {
+    const cached = await getCachedData<Student[]>(PREF_KEYS.STUDENTS, []);
+    const student = cached.find(s => s.id === idOrRoll || s.rollNo === idOrRoll);
+    const targetId = student?.id || idOrRoll;
+    const targetRoll = student?.rollNo || idOrRoll;
+    const displayName = student ? `${student.name} (${student.rollNo})` : idOrRoll;
+
+    // 1. Delete from native users table (role = 'student')
+    const { error: errUser } = await supabase.from('users').delete().eq('id', targetId);
+    if (errUser) {
+      console.warn('Supabase delete user by id error:', errUser);
+    }
+    if (targetRoll && targetRoll !== targetId) {
+      await supabase.from('users').delete().eq('roll', targetRoll);
+      await supabase.from('users').delete().eq('login_id', targetRoll);
+    }
+
+    // 2. Delete from native students table if it exists
+    try {
+      await supabase.from('students').delete().eq('id', targetId);
+      if (targetRoll !== targetId) {
+        await supabase.from('students').delete().eq('roll_no', targetRoll);
+      }
+    } catch (e) {}
+
+    // 3. Delete from audit_logs universal sync store
+    await supabase.from('audit_logs').delete().eq('id', `SYNC_students_${targetId}`);
+    if (targetRoll && targetRoll !== targetId) {
+      await supabase.from('audit_logs').delete().eq('id', `SYNC_students_${targetRoll}`);
+    }
+    await supabase.from('audit_logs').delete()
+      .eq('action', 'CLOUD_SYNC::students')
+      .in('user_id', [targetId, targetRoll]);
+
+    // 4. Cascade cleanup: student attendance records, leave requests, registration requests
+    try {
+      await supabase.from('attendance_records').delete().or(`student_id.eq.${targetId},student_id.eq.${targetRoll}`);
+    } catch (e) {}
+    try {
+      await supabase.from('attendance').delete().or(`student_id.eq.${targetId},student_id.eq.${targetRoll}`);
+    } catch (e) {}
+    try {
+      await supabase.from('leave_requests').delete().or(`applicant_id.eq.${targetId},applicant_id.eq.${targetRoll},student_id.eq.${targetId},student_id.eq.${targetRoll}`);
+    } catch (e) {}
+    try {
+      await supabase.from('registration_requests').delete().or(`roll_no.eq.${targetRoll},email.eq.${student?.email || ''}`);
+    } catch (e) {}
+
+    // 5. Update local cache (Preferences & localStorage)
+    const updatedStudents = cached.filter(s => s.id !== targetId && s.rollNo !== targetRoll);
+    await setCachedData(PREF_KEYS.STUDENTS, updatedStudents);
+
+    const cachedAttendance = await getCachedData<AttendanceRecord[]>(PREF_KEYS.ATTENDANCE, []);
+    const updatedAttendance = cachedAttendance.filter(a => a.studentId !== targetId && a.studentId !== targetRoll);
+    await setCachedData(PREF_KEYS.ATTENDANCE, updatedAttendance);
+
+    const cachedLeaves = await getCachedData<LeaveRequest[]>(PREF_KEYS.LEAVES, []);
+    const updatedLeaves = cachedLeaves.filter(l => l.studentId !== targetId && l.applicantId !== targetId && l.applicantId !== targetRoll);
+    await setCachedData(PREF_KEYS.LEAVES, updatedLeaves);
+
+    return { success: true, message: `Student ${displayName} successfully deleted.` };
+  } catch (err: any) {
+    console.error('Error deleting student:', err);
+    return { success: false, message: `Failed to delete student: ${err?.message || 'Network error'}` };
+  }
 }
 
 // -------------------------------------------------------------
@@ -294,23 +381,65 @@ export async function deleteStudentFromDB(id: string): Promise<boolean> {
 // -------------------------------------------------------------
 export async function fetchFacultyFromDB(): Promise<Faculty[]> {
   const cloudData = await fetchCloudRecords<any>('faculty');
-  if (cloudData !== null && cloudData.length > 0) {
-    const mapped: Faculty[] = cloudData.map((d: any) => ({
-      id: d.id,
-      facultyCode: d.faculty_code || d.facultyCode,
-      name: d.name,
-      email: d.email,
-      department: d.department || 'Department of Computer Science & Engineering',
-      designation: d.designation || 'Lecturer',
-      phone: d.phone || '',
-      subjectsHandled: d.subjects_handled || d.subjectsHandled || [],
-      approvalStatus: d.approval_status || d.approvalStatus || 'approved',
-      passwordHash: d.password_hash || d.passwordHash
-    }));
-    await setCachedData(PREF_KEYS.FACULTY, mapped);
-    return mapped;
+  const facultyMap = new Map<string, Faculty>();
+
+  if (cloudData !== null) {
+    for (const d of cloudData) {
+      const code = (d.faculty_code || d.facultyCode || d.id || '').trim();
+      facultyMap.set(d.id, {
+        id: d.id,
+        facultyCode: code,
+        name: d.name,
+        email: d.email,
+        department: d.department || 'Department of Computer Science & Engineering',
+        designation: d.designation || 'Lecturer',
+        phone: d.phone || '',
+        subjectsHandled: d.subjects_handled || d.subjectsHandled || [],
+        approvalStatus: d.approval_status || d.approvalStatus || 'approved',
+        passwordHash: d.password_hash || d.passwordHash
+      });
+    }
   }
-  return getCachedData<Faculty[]>(PREF_KEYS.FACULTY, INITIAL_FACULTY);
+
+  // Also query native users table in Supabase where role = 'staff'
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data: staffUsers, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('role', 'staff');
+      if (!error && Array.isArray(staffUsers)) {
+        for (const u of staffUsers) {
+          if (!facultyMap.has(u.id)) {
+            const code = (u.faculty_code || u.login_id || u.id || '').trim();
+            facultyMap.set(u.id, {
+              id: u.id,
+              facultyCode: code,
+              name: u.name,
+              email: u.email || `${u.id}@college.edu`,
+              department: u.dept_id === 'cse' ? 'Department of Computer Science & Engineering' : (u.dept_id || 'Department of Computer Science & Engineering'),
+              designation: 'Faculty',
+              phone: u.phone || '',
+              subjectsHandled: [],
+              approvalStatus: 'approved',
+              passwordHash: u.password_hash
+            });
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  let resultList = Array.from(facultyMap.values());
+  if (cloudData === null && resultList.length === 0) {
+    resultList = await getCachedData<Faculty[]>(PREF_KEYS.FACULTY, INITIAL_FACULTY);
+  }
+
+  await setCachedData(PREF_KEYS.FACULTY, resultList);
+  return resultList;
 }
 
 export async function saveFacultyToDB(fac: Faculty): Promise<boolean> {
@@ -329,6 +458,22 @@ export async function saveFacultyToDB(fac: Faculty): Promise<boolean> {
     passwordHash: fac.passwordHash || null
   });
 
+  // Dual-write to native users table
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('users').upsert({
+        id: fac.id,
+        name: fac.name,
+        email: fac.email,
+        role: 'staff',
+        dept_id: 'cse',
+        login_id: fac.facultyCode,
+        password_hash: fac.passwordHash || 'staff123'
+      });
+    } catch (e) {}
+  }
+
   const cached = await getCachedData<Faculty[]>(PREF_KEYS.FACULTY, []);
   const idx = cached.findIndex(f => f.id === fac.id);
   if (idx >= 0) cached[idx] = fac;
@@ -338,12 +483,70 @@ export async function saveFacultyToDB(fac: Faculty): Promise<boolean> {
   return cloudOk;
 }
 
-export async function deleteFacultyFromDB(id: string): Promise<boolean> {
-  await deleteCloudRecord('faculty', id);
-  const cached = await getCachedData<Faculty[]>(PREF_KEYS.FACULTY, []);
-  const updated = cached.filter(f => f.id !== id);
-  await setCachedData(PREF_KEYS.FACULTY, updated);
-  return true;
+export async function deleteFacultyFromDB(idOrCode: string): Promise<DeleteResult> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { success: false, message: 'Supabase cloud database is unreachable. Cannot delete.' };
+  }
+
+  try {
+    const cached = await getCachedData<Faculty[]>(PREF_KEYS.FACULTY, []);
+    const fac = cached.find(f => f.id === idOrCode || f.facultyCode === idOrCode);
+    const targetId = fac?.id || idOrCode;
+    const targetCode = fac?.facultyCode || idOrCode;
+    const displayName = fac ? `${fac.name} (${fac.facultyCode})` : idOrCode;
+
+    // 1. Delete from users table (role = 'staff')
+    await supabase.from('users').delete().eq('id', targetId);
+    if (targetCode && targetCode !== targetId) {
+      await supabase.from('users').delete().eq('login_id', targetCode);
+    }
+
+    // 2. Delete from native faculty table if exists
+    try {
+      await supabase.from('faculty').delete().eq('id', targetId);
+    } catch (e) {}
+
+    // 3. Delete from audit_logs universal cloud sync
+    await supabase.from('audit_logs').delete().eq('id', `SYNC_faculty_${targetId}`);
+    if (targetCode && targetCode !== targetId) {
+      await supabase.from('audit_logs').delete().eq('id', `SYNC_faculty_${targetCode}`);
+    }
+    await supabase.from('audit_logs').delete()
+      .eq('action', 'CLOUD_SYNC::faculty')
+      .in('user_id', [targetId, targetCode]);
+
+    // 4. Safely unassign faculty in courses & timetable in Supabase
+    try {
+      await supabase.from('courses').update({ faculty_id: null }).eq('faculty_id', targetId);
+      await supabase.from('courses').update({ faculty_id: null }).eq('faculty_id', targetCode);
+    } catch (e) {}
+    try {
+      await supabase.from('timetable').update({ staff_id: null }).eq('staff_id', targetId);
+      await supabase.from('timetable').update({ staff_id: null }).eq('staff_id', targetCode);
+    } catch (e) {}
+    try {
+      await supabase.from('registration_requests').delete().or(`faculty_code.eq.${targetCode},email.eq.${fac?.email || ''}`);
+    } catch (e) {}
+
+    // 5. Update local cache
+    const updatedFaculty = cached.filter(f => f.id !== targetId && f.facultyCode !== targetCode);
+    await setCachedData(PREF_KEYS.FACULTY, updatedFaculty);
+
+    // Unassign in cached subjects & timetable
+    const cachedSubjects = await getCachedData<Subject[]>(PREF_KEYS.SUBJECTS, []);
+    const updatedSubjects = cachedSubjects.map(s => (s.facultyId === targetId || s.facultyId === targetCode) ? { ...s, facultyId: '', facultyName: 'Unassigned' } : s);
+    await setCachedData(PREF_KEYS.SUBJECTS, updatedSubjects);
+
+    const cachedTT = await getCachedData<TimetableSlot[]>(PREF_KEYS.TIMETABLE, []);
+    const updatedTT = cachedTT.map(t => (t.facultyId === targetId || t.facultyId === targetCode) ? { ...t, facultyId: '', facultyName: 'Unassigned' } : t);
+    await setCachedData(PREF_KEYS.TIMETABLE, updatedTT);
+
+    return { success: true, message: `Faculty ${displayName} successfully deleted.` };
+  } catch (err: any) {
+    console.error('Error deleting faculty:', err);
+    return { success: false, message: `Failed to delete faculty: ${err?.message || 'Network error'}` };
+  }
 }
 
 // -------------------------------------------------------------
@@ -351,22 +554,56 @@ export async function deleteFacultyFromDB(id: string): Promise<boolean> {
 // -------------------------------------------------------------
 export async function fetchSubjectsFromDB(): Promise<Subject[]> {
   const cloudData = await fetchCloudRecords<any>('subjects');
-  if (cloudData !== null && cloudData.length > 0) {
-    const mapped: Subject[] = cloudData.map((d: any) => ({
-      id: d.id,
-      code: d.code,
-      name: d.name,
-      department: d.department || 'Department of Computer Science & Engineering',
-      semester: d.semester || 5,
-      type: d.type as any,
-      credits: d.credits || 3,
-      facultyId: d.faculty_id || d.facultyId || '',
-      facultyName: d.faculty_name || d.facultyName
-    }));
-    await setCachedData(PREF_KEYS.SUBJECTS, mapped);
-    return mapped;
+  const subjectMap = new Map<string, Subject>();
+
+  if (cloudData !== null) {
+    for (const d of cloudData) {
+      subjectMap.set(d.id, {
+        id: d.id,
+        code: d.code,
+        name: d.name,
+        department: d.department || 'Department of Computer Science & Engineering',
+        semester: d.semester || 5,
+        type: d.type as any,
+        credits: d.credits || 3,
+        facultyId: d.faculty_id || d.facultyId || '',
+        facultyName: d.faculty_name || d.facultyName
+      });
+    }
   }
-  return getCachedData<Subject[]>(PREF_KEYS.SUBJECTS, INITIAL_SUBJECTS);
+
+  // Also query native courses table in Supabase
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data: courses, error } = await supabase.from('courses').select('*');
+      if (!error && Array.isArray(courses)) {
+        for (const c of courses) {
+          if (!subjectMap.has(c.id)) {
+            subjectMap.set(c.id, {
+              id: c.id,
+              code: c.code,
+              name: c.name,
+              department: c.dept_id === 'cse' ? 'Department of Computer Science & Engineering' : (c.dept_id || 'Department of Computer Science & Engineering'),
+              semester: 5,
+              type: (c.type === 'Practical' ? 'Practical' : 'Lecture'),
+              credits: 3,
+              facultyId: c.faculty_id || '',
+              facultyName: ''
+            });
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  let resultList = Array.from(subjectMap.values());
+  if (cloudData === null && resultList.length === 0) {
+    resultList = await getCachedData<Subject[]>(PREF_KEYS.SUBJECTS, INITIAL_SUBJECTS);
+  }
+
+  await setCachedData(PREF_KEYS.SUBJECTS, resultList);
+  return resultList;
 }
 
 export async function saveSubjectToDB(subject: Subject): Promise<boolean> {
@@ -382,6 +619,20 @@ export async function saveSubjectToDB(subject: Subject): Promise<boolean> {
     facultyId: subject.facultyId
   });
 
+  // Also upsert to native courses table in Supabase
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('courses').upsert({
+        id: subject.id,
+        code: subject.code,
+        name: subject.name,
+        dept_id: 'cse',
+        type: subject.type === 'Practical' ? 'Practical' : 'Lecture'
+      });
+    } catch (e) {}
+  }
+
   const cached = await getCachedData<Subject[]>(PREF_KEYS.SUBJECTS, []);
   const idx = cached.findIndex(s => s.id === subject.id);
   if (idx >= 0) cached[idx] = subject;
@@ -391,12 +642,82 @@ export async function saveSubjectToDB(subject: Subject): Promise<boolean> {
   return cloudOk;
 }
 
-export async function deleteSubjectFromDB(id: string): Promise<boolean> {
-  await deleteCloudRecord('subjects', id);
-  const cached = await getCachedData<Subject[]>(PREF_KEYS.SUBJECTS, []);
-  const updated = cached.filter(s => s.id !== id);
-  await setCachedData(PREF_KEYS.SUBJECTS, updated);
-  return true;
+export async function deleteSubjectFromDB(idOrCode: string): Promise<DeleteResult> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { success: false, message: 'Supabase cloud database is unreachable. Cannot delete.' };
+  }
+
+  try {
+    const cached = await getCachedData<Subject[]>(PREF_KEYS.SUBJECTS, []);
+    const sub = cached.find(s => s.id === idOrCode || s.code === idOrCode);
+    const targetId = sub?.id || idOrCode;
+    const targetCode = sub?.code || idOrCode;
+    const displayName = sub ? `${sub.name} (${sub.code})` : idOrCode;
+
+    // 1. Cascaded deletion of linked timetable slots FIRST to satisfy foreign key constraint timetable_course_id_fkey
+    try {
+      await supabase.from('timetable').delete().or(`course_id.eq.${targetId},course_id.eq.${targetCode}`);
+    } catch (e) {}
+
+    // Also delete linked timetable slots from audit_logs
+    try {
+      const { data: ttLogs } = await supabase.from('audit_logs').select('id, details').eq('action', 'CLOUD_SYNC::timetable');
+      if (ttLogs && Array.isArray(ttLogs)) {
+        const toDeleteIds: string[] = [];
+        for (const log of ttLogs) {
+          if (log.details && (log.details.includes(`"${targetId}"`) || log.details.includes(`"${targetCode}"`))) {
+            toDeleteIds.push(log.id);
+          }
+        }
+        if (toDeleteIds.length > 0) {
+          await supabase.from('audit_logs').delete().in('id', toDeleteIds);
+        }
+      }
+    } catch (e) {}
+
+    // 2. Delete attendance records for this subject
+    try {
+      await supabase.from('attendance_records').delete().or(`subject_id.eq.${targetId},subject_id.eq.${targetCode}`);
+    } catch (e) {}
+
+    // 3. Delete from native courses table
+    await supabase.from('courses').delete().eq('id', targetId);
+    if (targetCode && targetCode !== targetId) {
+      await supabase.from('courses').delete().eq('code', targetCode);
+    }
+
+    // 4. Delete from native subjects table if exists
+    try {
+      await supabase.from('subjects').delete().eq('id', targetId);
+    } catch (e) {}
+
+    // 5. Delete from audit_logs universal cloud sync
+    await supabase.from('audit_logs').delete().eq('id', `SYNC_subjects_${targetId}`);
+    if (targetCode && targetCode !== targetId) {
+      await supabase.from('audit_logs').delete().eq('id', `SYNC_subjects_${targetCode}`);
+    }
+    await supabase.from('audit_logs').delete()
+      .eq('action', 'CLOUD_SYNC::subjects')
+      .in('user_id', [targetId, targetCode]);
+
+    // 6. Update local cache for subjects, timetable, and attendance
+    const updatedSubjects = cached.filter(s => s.id !== targetId && s.code !== targetCode);
+    await setCachedData(PREF_KEYS.SUBJECTS, updatedSubjects);
+
+    const cachedTT = await getCachedData<TimetableSlot[]>(PREF_KEYS.TIMETABLE, []);
+    const updatedTT = cachedTT.filter(t => t.subjectId !== targetId && t.subjectCode !== targetCode && t.subjectId !== targetCode);
+    await setCachedData(PREF_KEYS.TIMETABLE, updatedTT);
+
+    const cachedAtt = await getCachedData<AttendanceRecord[]>(PREF_KEYS.ATTENDANCE, []);
+    const updatedAtt = cachedAtt.filter(a => a.subjectId !== targetId && a.subjectId !== targetCode);
+    await setCachedData(PREF_KEYS.ATTENDANCE, updatedAtt);
+
+    return { success: true, message: `Subject ${displayName} and its linked timetable slots deleted successfully.` };
+  } catch (err: any) {
+    console.error('Error deleting subject:', err);
+    return { success: false, message: `Failed to delete subject: ${err?.message || 'Network error'}` };
+  }
 }
 
 // -------------------------------------------------------------
@@ -404,26 +725,64 @@ export async function deleteSubjectFromDB(id: string): Promise<boolean> {
 // -------------------------------------------------------------
 export async function fetchTimetableFromDB(): Promise<TimetableSlot[]> {
   const cloudData = await fetchCloudRecords<any>('timetable');
-  if (cloudData !== null && cloudData.length > 0) {
-    const mapped: TimetableSlot[] = cloudData.map((d: any) => ({
-      id: d.id,
-      dayOfWeek: d.day_of_week || d.dayOfWeek || d.day || 'Monday',
-      timeSlot: d.time_slot || d.timeSlot || d.time || '09:00 AM - 10:00 AM',
-      subjectId: d.subject_id || d.subjectId || d.course_id || 'SUB501',
-      subjectName: d.subject_name || d.subjectName || '',
-      subjectCode: d.subject_code || d.subjectCode || '',
-      subjectType: d.subject_type || d.subjectType || 'Lecture',
-      facultyId: d.faculty_id || d.facultyId || d.staff_id || 'FAC_MB',
-      facultyName: d.faculty_name || d.facultyName || '',
-      roomNo: d.room_no || d.roomNo || d.classroom || 'Hall - 2211',
-      department: d.department || 'Department of Computer Science & Engineering',
-      semester: d.semester || 5,
-      section: d.section || 'B Batch'
-    }));
-    await setCachedData(PREF_KEYS.TIMETABLE, mapped);
-    return mapped;
+  const slotMap = new Map<string, TimetableSlot>();
+
+  if (cloudData !== null) {
+    for (const d of cloudData) {
+      slotMap.set(d.id, {
+        id: d.id,
+        dayOfWeek: d.day_of_week || d.dayOfWeek || d.day || 'Monday',
+        timeSlot: d.time_slot || d.timeSlot || d.time || '09:00 AM - 10:00 AM',
+        subjectId: d.subject_id || d.subjectId || d.course_id || 'SUB501',
+        subjectName: d.subject_name || d.subjectName || '',
+        subjectCode: d.subject_code || d.subjectCode || '',
+        subjectType: d.subject_type || d.subjectType || 'Lecture',
+        facultyId: d.faculty_id || d.facultyId || d.staff_id || 'FAC_MB',
+        facultyName: d.faculty_name || d.facultyName || '',
+        roomNo: d.room_no || d.roomNo || d.classroom || 'Hall - 2211',
+        department: d.department || 'Department of Computer Science & Engineering',
+        semester: d.semester || 5,
+        section: d.section || 'B Batch'
+      });
+    }
   }
-  return getCachedData<TimetableSlot[]>(PREF_KEYS.TIMETABLE, INITIAL_TIMETABLE);
+
+  // Also query native timetable table
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data: nativeTT, error } = await supabase.from('timetable').select('*');
+      if (!error && Array.isArray(nativeTT)) {
+        for (const t of nativeTT) {
+          if (!slotMap.has(t.id)) {
+            slotMap.set(t.id, {
+              id: t.id,
+              dayOfWeek: t.day || 'Monday',
+              timeSlot: t.time || '08.30 AM - 09.30 AM',
+              subjectId: t.course_id || '',
+              subjectName: '',
+              subjectCode: t.course_id || '',
+              subjectType: 'Lecture',
+              facultyId: t.staff_id || '',
+              facultyName: '',
+              roomNo: t.classroom || 'Hall - 2211',
+              department: 'Department of Computer Science & Engineering',
+              semester: 5,
+              section: 'B Batch'
+            });
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  let resultList = Array.from(slotMap.values());
+  if (cloudData === null && resultList.length === 0) {
+    resultList = await getCachedData<TimetableSlot[]>(PREF_KEYS.TIMETABLE, INITIAL_TIMETABLE);
+  }
+
+  await setCachedData(PREF_KEYS.TIMETABLE, resultList);
+  return resultList;
 }
 
 export async function saveTimetableSlotToDB(slot: TimetableSlot): Promise<boolean> {
@@ -444,6 +803,21 @@ export async function saveTimetableSlotToDB(slot: TimetableSlot): Promise<boolea
     section: slot.section
   });
 
+  // Also upsert to native timetable table in Supabase
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('timetable').upsert({
+        id: slot.id,
+        course_id: slot.subjectId || 'SUB501',
+        day: slot.dayOfWeek,
+        time: slot.timeSlot,
+        classroom: slot.roomNo,
+        staff_id: slot.facultyId || null
+      });
+    } catch (e) {}
+  }
+
   const cached = await getCachedData<TimetableSlot[]>(PREF_KEYS.TIMETABLE, []);
   const idx = cached.findIndex(s => s.id === slot.id);
   if (idx >= 0) cached[idx] = slot;
@@ -453,12 +827,30 @@ export async function saveTimetableSlotToDB(slot: TimetableSlot): Promise<boolea
   return cloudOk;
 }
 
-export async function deleteTimetableSlotFromDB(id: string): Promise<boolean> {
-  await deleteCloudRecord('timetable', id);
-  const cached = await getCachedData<TimetableSlot[]>(PREF_KEYS.TIMETABLE, []);
-  const updated = cached.filter(t => t.id !== id);
-  await setCachedData(PREF_KEYS.TIMETABLE, updated);
-  return true;
+export async function deleteTimetableSlotFromDB(slotId: string): Promise<DeleteResult> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { success: false, message: 'Supabase cloud database is unreachable. Cannot delete.' };
+  }
+
+  try {
+    // 1. Delete from native timetable table
+    await supabase.from('timetable').delete().eq('id', slotId);
+
+    // 2. Delete from audit_logs universal cloud sync
+    await supabase.from('audit_logs').delete().eq('id', `SYNC_timetable_${slotId}`);
+    await supabase.from('audit_logs').delete().eq('action', 'CLOUD_SYNC::timetable').eq('user_id', slotId);
+
+    // 3. Update local cache
+    const cached = await getCachedData<TimetableSlot[]>(PREF_KEYS.TIMETABLE, []);
+    const updated = cached.filter(t => t.id !== slotId);
+    await setCachedData(PREF_KEYS.TIMETABLE, updated);
+
+    return { success: true, message: 'Timetable slot deleted successfully.' };
+  } catch (err: any) {
+    console.error('Error deleting timetable slot:', err);
+    return { success: false, message: `Failed to delete timetable slot: ${err?.message || 'Network error'}` };
+  }
 }
 
 // -------------------------------------------------------------
@@ -859,12 +1251,33 @@ export async function saveParentToDB(parent: ParentRecord): Promise<boolean> {
   return cloudOk;
 }
 
-export async function deleteParentFromDB(id: string): Promise<boolean> {
-  await deleteCloudRecord('parents', id);
-  const cached = await getCachedData<ParentRecord[]>(PREF_KEYS.PARENTS, []);
-  const updated = cached.filter(p => p.id !== id);
-  await setCachedData(PREF_KEYS.PARENTS, updated);
-  return true;
+export async function deleteParentFromDB(id: string): Promise<DeleteResult> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { success: false, message: 'Supabase cloud database is unreachable. Cannot delete.' };
+  }
+
+  try {
+    const cached = await getCachedData<ParentRecord[]>(PREF_KEYS.PARENTS, []);
+    const parent = cached.find(p => p.id === id);
+    const displayName = parent ? parent.name : id;
+
+    await supabase.from('parents').delete().eq('id', id);
+    await supabase.from('users').delete().eq('id', id);
+    if (parent?.childRollNo) {
+      await supabase.from('users').delete().eq('login_id', `PAR_${parent.childRollNo}`);
+    }
+    await supabase.from('audit_logs').delete().eq('id', `SYNC_parents_${id}`);
+    await supabase.from('audit_logs').delete().eq('action', 'CLOUD_SYNC::parents').eq('user_id', id);
+
+    const updated = cached.filter(p => p.id !== id);
+    await setCachedData(PREF_KEYS.PARENTS, updated);
+
+    return { success: true, message: `Parent ${displayName} deleted successfully.` };
+  } catch (err: any) {
+    console.error('Error deleting parent:', err);
+    return { success: false, message: `Failed to delete parent: ${err?.message || 'Network error'}` };
+  }
 }
 
 export async function fetchDepartmentsFromDB(): Promise<Department[]> {
@@ -900,11 +1313,28 @@ export async function saveDepartmentToDB(dept: Department): Promise<boolean> {
   return cloudOk;
 }
 
-export async function deleteDepartmentFromDB(id: string): Promise<boolean> {
-  await deleteCloudRecord('departments', id);
-  const cached = await getCachedData<Department[]>(PREF_KEYS.DEPARTMENTS, []);
-  const updated = cached.filter(d => d.id !== id);
-  await setCachedData(PREF_KEYS.DEPARTMENTS, updated);
-  return true;
+export async function deleteDepartmentFromDB(id: string): Promise<DeleteResult> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { success: false, message: 'Supabase cloud database is unreachable. Cannot delete.' };
+  }
+
+  try {
+    const cached = await getCachedData<Department[]>(PREF_KEYS.DEPARTMENTS, []);
+    const dept = cached.find(d => d.id === id);
+    const displayName = dept ? `${dept.name} (${dept.code})` : id;
+
+    await supabase.from('departments').delete().eq('id', id);
+    await supabase.from('audit_logs').delete().eq('id', `SYNC_departments_${id}`);
+    await supabase.from('audit_logs').delete().eq('action', 'CLOUD_SYNC::departments').eq('user_id', id);
+
+    const updated = cached.filter(d => d.id !== id);
+    await setCachedData(PREF_KEYS.DEPARTMENTS, updated);
+
+    return { success: true, message: `Department ${displayName} deleted successfully.` };
+  } catch (err: any) {
+    console.error('Error deleting department:', err);
+    return { success: false, message: `Failed to delete department: ${err?.message || 'Network error'}` };
+  }
 }
 
