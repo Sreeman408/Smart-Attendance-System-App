@@ -313,10 +313,12 @@ export async function sendEmailVerificationOTP(email: string): Promise<{ success
 
   if (supabase) {
     try {
+      const redirectUrl = typeof window !== 'undefined' ? window.location.href.split('?')[0].split('#')[0] : undefined;
       const { error } = await supabase.auth.signInWithOtp({
         email: trimmedEmail,
         options: {
-          shouldCreateUser: true
+          shouldCreateUser: true,
+          emailRedirectTo: redirectUrl
         }
       });
       if (!error) {
@@ -374,38 +376,134 @@ export function generateVerificationOTP(email: string): string {
   return otp;
 }
 
+export function extractTokenFromInput(input: string): {
+  isLink: boolean;
+  token?: string;
+  tokenHash?: string;
+  code?: string;
+} {
+  const trimmed = input.trim();
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://') && !trimmed.includes('verify?') && !trimmed.includes('token=') && !trimmed.includes('token_hash=')) {
+    return { isLink: false, token: trimmed };
+  }
+
+  try {
+    const fullUrl = trimmed.startsWith('http') ? trimmed : `https://dummy.com/${trimmed.startsWith('?') ? trimmed : '?' + trimmed}`;
+    const url = new URL(fullUrl);
+    
+    const tokenHash = url.searchParams.get('token_hash');
+    const token = url.searchParams.get('token');
+    const code = url.searchParams.get('code');
+
+    if (url.hash && url.hash.length > 1) {
+      const hashParams = new URLSearchParams(url.hash.substring(1));
+      const hashToken = hashParams.get('token') || hashParams.get('access_token');
+      if (hashToken) {
+        return { isLink: true, token: hashToken, tokenHash: tokenHash || undefined, code: code || undefined };
+      }
+    }
+
+    return {
+      isLink: true,
+      token: token || undefined,
+      tokenHash: tokenHash || undefined,
+      code: code || undefined
+    };
+  } catch {
+    return { isLink: false, token: trimmed };
+  }
+}
+
 export async function verifyOTPCodeAsync(email: string, codeInput: string): Promise<boolean> {
   const trimmedEmail = email.trim().toLowerCase();
-  const trimmedCode = codeInput.trim();
+  const trimmedInput = codeInput.trim();
+  if (!trimmedInput) return false;
 
-  // 1. Try Supabase Auth verifyOtp
+  const parsed = extractTokenFromInput(trimmedInput);
   const supabase = getSupabaseClient();
+
   if (supabase) {
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: trimmedEmail,
-        token: trimmedCode,
-        type: 'email'
-      });
-      if (!error && data?.session) {
-        return true;
-      }
-    } catch (e) {
-      // Fall through to local check
+    // 1. Try token_hash if present in verification link
+    if (parsed.tokenHash) {
+      try {
+        const { data, error } = await supabase.auth.verifyOtp({
+          token_hash: parsed.tokenHash,
+          type: 'email'
+        });
+        if (!error && (data?.session || data?.user)) return true;
+      } catch {}
+
+      try {
+        const { data, error } = await supabase.auth.verifyOtp({
+          token_hash: parsed.tokenHash,
+          type: 'signup' as any
+        });
+        if (!error && (data?.session || data?.user)) return true;
+      } catch {}
+    }
+
+    // 2. Try token (either extracted token from link or direct 6-digit numeric OTP)
+    const candidateToken = parsed.token || trimmedInput;
+    if (candidateToken) {
+      try {
+        const { data, error } = await supabase.auth.verifyOtp({
+          email: trimmedEmail,
+          token: candidateToken,
+          type: 'email'
+        });
+        if (!error && (data?.session || data?.user)) return true;
+      } catch {}
+
+      try {
+        const { data, error } = await supabase.auth.verifyOtp({
+          email: trimmedEmail,
+          token: candidateToken,
+          type: 'signup' as any
+        });
+        if (!error && (data?.session || data?.user)) return true;
+      } catch {}
+    }
+
+    // 3. Try PKCE authorization code if passed
+    if (parsed.code) {
+      try {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(parsed.code);
+        if (!error && data?.session) return true;
+      } catch {}
     }
   }
 
-  // 2. Local OTP verification check
+  // 4. Local OTP verification check fallback
   try {
     const otps = JSON.parse(localStorage.getItem(OTP_STORAGE_KEY) || '{}');
     const record = otps[trimmedEmail];
-    if (record && record.code === trimmedCode && record.expires > Date.now()) {
+    const candidateToken = parsed.token || trimmedInput;
+    if (record && record.code === candidateToken && record.expires > Date.now()) {
       delete otps[trimmedEmail];
       localStorage.setItem(OTP_STORAGE_KEY, JSON.stringify(otps));
       return true;
     }
   } catch (e) {
     console.error('OTP check error:', e);
+  }
+  return false;
+}
+
+export async function checkEmailVerifiedStatus(email: string): Promise<boolean> {
+  const trimmedEmail = email.trim().toLowerCase();
+  const supabase = getSupabaseClient();
+  if (!supabase) return false;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.email?.toLowerCase() === trimmedEmail) {
+      return true;
+    }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email?.toLowerCase() === trimmedEmail && (user.email_confirmed_at || (user as any).confirmed_at)) {
+      return true;
+    }
+  } catch (e) {
+    console.warn('Error checking verified status:', e);
   }
   return false;
 }

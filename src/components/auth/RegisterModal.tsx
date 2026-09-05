@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Role } from '../../types';
-import { sendEmailVerificationOTP, verifyOTPCodeAsync } from '../../services/authService';
+import { sendEmailVerificationOTP, verifyOTPCodeAsync, checkEmailVerifiedStatus } from '../../services/authService';
 import { submitRegistrationRequestDB } from '../../services/dbService';
 import { UniversityLogo } from '../common/UniversityLogo';
 import { ThemeToggle } from '../common/ThemeToggle';
 import { hashPassword } from '../../utils/cryptoUtils';
-import { X, CheckCircle, Mail, AlertCircle, ShieldCheck, UserCheck, GraduationCap, Building2, User, Key, Phone, Lock } from 'lucide-react';
+import { X, CheckCircle, Mail, AlertCircle, ShieldCheck, UserCheck, GraduationCap, Building2, User, Key, Phone, Lock, Link as LinkIcon, RefreshCw } from 'lucide-react';
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -42,10 +42,12 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [designation, setDesignation] = useState('Assistant Professor');
   const [phone, setPhone] = useState('');
 
-  // OTP Verification State
+  // OTP & Verification State
   const [step, setStep] = useState<'form' | 'otp' | 'pending'>('form');
   const [otpInfoMsg, setOtpInfoMsg] = useState('');
   const [userOTPInput, setUserOTPInput] = useState('');
+  const [verificationMode, setVerificationMode] = useState<'code' | 'link'>('code');
+  const [checkingLinkStatus, setCheckingLinkStatus] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -81,7 +83,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     }
 
     setLoading(true);
-    // Send Real Email OTP via Supabase Auth / Service
     const res = await sendEmailVerificationOTP(email);
     setLoading(false);
 
@@ -94,18 +95,18 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     setStep('otp');
   };
 
-  const handleVerifyAndSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-    setLoading(true);
-
-    const isCorrect = await verifyOTPCodeAsync(email, userOTPInput);
-    if (!isCorrect) {
-      setErrorMsg('Invalid or expired verification code. Please check your email and try again.');
-      setLoading(false);
-      return;
+  const handleOTPInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val.startsWith('http://') || val.startsWith('https://') || val.includes('verify?') || val.includes('token=')) {
+      setVerificationMode('link');
+      setUserOTPInput(val);
+    } else {
+      setUserOTPInput(val);
     }
+  };
 
+  const completeRegistration = async () => {
+    setLoading(true);
     const hashedPwd = await hashPassword(password);
 
     // Prepare Registration Request for Admin Queue
@@ -138,6 +139,42 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       return;
     }
     setStep('pending');
+  };
+
+  const handleVerifyAndSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setLoading(true);
+
+    const isCorrect = await verifyOTPCodeAsync(email, userOTPInput);
+    if (!isCorrect) {
+      const isAlreadyVerified = await checkEmailVerifiedStatus(email);
+      if (!isAlreadyVerified) {
+        setErrorMsg('Invalid or expired verification code or link. If you received a link in your email, paste it in the "Paste Link" tab or click it in your email.');
+        setLoading(false);
+        return;
+      }
+    }
+
+    await completeRegistration();
+  };
+
+  const handleCheckLinkStatus = async () => {
+    setErrorMsg('');
+    setCheckingLinkStatus(true);
+    try {
+      const isVerified = await checkEmailVerifiedStatus(email);
+      if (isVerified) {
+        await completeRegistration();
+        return;
+      } else {
+        setErrorMsg('Verification link not confirmed yet. If you clicked the link, please wait a moment and try again, or paste the link directly.');
+      }
+    } catch {
+      setErrorMsg('Failed to check link verification status.');
+    } finally {
+      setCheckingLinkStatus(false);
+    }
   };
 
   const handleFinish = () => {
@@ -469,7 +506,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             </form>
           )}
 
-          {/* STEP 2: Real OTP Verification */}
+          {/* STEP 2: Real OTP / Link Verification */}
           {step === 'otp' && (
             <form onSubmit={handleVerifyAndSubmit} className="space-y-4">
               <div className="text-center py-2">
@@ -478,7 +515,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                 </div>
                 <h4 className="font-bold text-base text-slate-900 dark:text-white">Verify Email Address</h4>
                 <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                  Enter the verification code sent to <strong className="text-slate-900 dark:text-slate-100 font-bold">{email}</strong>
+                  We sent a verification to <strong className="text-slate-900 dark:text-slate-100 font-bold">{email}</strong>
                 </p>
               </div>
 
@@ -496,35 +533,105 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5 text-center">
-                  Verification Code (OTP)
-                </label>
-                <input
-                  type="text"
-                  maxLength={6}
-                  required
-                  value={userOTPInput}
-                  onChange={e => setUserOTPInput(e.target.value)}
-                  placeholder="123456"
-                  className="w-full text-center tracking-widest font-mono text-2xl font-bold py-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
+              {/* Verification Mode Selector */}
+              <div className="flex bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl gap-1 border border-slate-200 dark:border-slate-700">
                 <button
                   type="button"
-                  onClick={() => setStep('form')}
-                  className="w-1/3 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold rounded-xl text-sm transition-colors cursor-pointer"
+                  onClick={() => setVerificationMode('code')}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    verificationMode === 'code'
+                      ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
                 >
-                  Back
+                  6-Digit OTP Code
                 </button>
                 <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-2/3 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-md text-sm flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99]"
+                  type="button"
+                  onClick={() => setVerificationMode('link')}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    verificationMode === 'link'
+                      ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
                 >
-                  {loading ? 'Submitting...' : 'Submit for Admin Approval'}
+                  <LinkIcon className="w-3.5 h-3.5" />
+                  Paste Sign-up Link
+                </button>
+              </div>
+
+              {verificationMode === 'code' ? (
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5 text-center">
+                    Enter 6-Digit OTP Code
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    required={verificationMode === 'code'}
+                    value={userOTPInput}
+                    onChange={handleOTPInputChange}
+                    placeholder="123456"
+                    className="w-full text-center tracking-widest font-mono text-2xl font-bold py-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                    Paste Sign-up / Verification Link
+                  </label>
+                  <input
+                    type="text"
+                    required={verificationMode === 'link'}
+                    value={userOTPInput}
+                    onChange={handleOTPInputChange}
+                    placeholder="https://...supabase.co/auth/v1/verify?token=..."
+                    className="w-full text-xs font-mono py-3 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
+                  />
+                </div>
+              )}
+
+              {/* Informative Guidance Card */}
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl space-y-1.5 text-[11px] text-slate-700 dark:text-slate-300">
+                <div className="font-bold flex items-center gap-1.5 text-amber-900 dark:text-amber-300">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>Received a sign-up link instead of a 6-digit code?</span>
+                </div>
+                <p className="leading-relaxed">
+                  • <strong>Option A:</strong> Click the link in your email, then tap <em>"I Clicked the Link in Email"</em> below.
+                </p>
+                <p className="leading-relaxed">
+                  • <strong>Option B:</strong> Switch to the <em>"Paste Sign-up Link"</em> tab above and paste the email link directly.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-1">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep('form')}
+                    className="w-1/3 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold rounded-xl text-sm transition-colors cursor-pointer"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-2/3 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-md text-sm flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99]"
+                  >
+                    {loading ? 'Submitting...' : 'Submit for Admin Approval'}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCheckLinkStatus}
+                  disabled={checkingLinkStatus || loading}
+                  className="w-full py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-amber-600 ${checkingLinkStatus ? 'animate-spin' : ''}`} />
+                  {checkingLinkStatus ? 'Checking Email Link Status...' : 'I Clicked the Link in Email (Verify Link Status)'}
                 </button>
               </div>
             </form>
