@@ -3,117 +3,127 @@ import { User, Student, Faculty, Subject, TimetableSlot, AttendanceRecord, Leave
 export const INITIAL_USERS: User[] = [
   {
     id: 'usr_admin1',
-    name: 'Dr. Arthur Vance',
+    name: 'Dr. M. Balasubramanian',
     email: 'admin@college.edu',
     role: 'admin',
     avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-    department: 'Administration',
-    phone: '+1 (555) 019-2834'
+    department: 'Department of Computer Science & Engineering',
+    phone: '+91 94431 12345'
   },
   {
     id: 'usr_fac1',
-    name: 'Prof. Robert Langdon',
-    email: 'robert.langdon@college.edu',
+    name: 'Dr. M. Balasubramanian',
+    email: 'balasubramanian@annamalai.edu',
     role: 'faculty',
-    facultyId: 'FAC101',
+    facultyId: 'FAC_MB',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    department: 'Computer Science',
-    phone: '+1 (555) 234-5678'
+    department: 'Department of Computer Science & Engineering',
+    phone: '+91 94431 12345'
   },
   {
     id: 'usr_fac2',
-    name: 'Dr. Sarah Connor',
-    email: 'sarah.connor@college.edu',
+    name: 'Dr. K. Kavitha',
+    email: 'kavitha@annamalai.edu',
     role: 'faculty',
-    facultyId: 'FAC102',
+    facultyId: 'FAC_KK',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
-    department: 'Computer Science',
-    phone: '+1 (555) 876-5432'
+    department: 'Department of Computer Science & Engineering',
+    phone: '+91 94436 67890'
+  },
+  {
+    id: 'usr_fac3',
+    name: 'Dr. R. Saminathan',
+    email: 'saminathan@annamalai.edu',
+    role: 'faculty',
+    facultyId: 'FAC_RS',
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+    department: 'Department of Computer Science & Engineering',
+    phone: '+91 94433 34567'
   },
   {
     id: 'usr_stu1',
-    name: 'Rahul Sharma',
-    email: 'rahul.sharma@student.edu',
+    name: 'Sreeman',
+    email: 'sreeman@student.annamalai.edu',
     role: 'student',
     studentId: 'STU202401',
     avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150',
-    department: 'Computer Science',
-    phone: '+1 (555) 345-6789'
+    department: 'Department of Computer Science & Engineering',
+    phone: '+91 98765 43210'
   },
   {
     id: 'usr_stu2',
-    name: 'Priya Sharma',
-    email: 'priya.sharma@student.edu',
+    name: 'Ananya Verma',
+    email: 'ananya@student.annamalai.edu',
     role: 'student',
     studentId: 'STU202402',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-    department: 'Computer Science',
-    phone: '+1 (555) 456-7890'
+    department: 'Department of Computer Science & Engineering',
+    phone: '+91 98765 43211'
   },
   {
     id: 'usr_par1',
-    name: 'Vikram Sharma',
-    email: 'vikram.sharma@parent.com',
+    name: 'Sundaram S',
+    email: 'sundaram@parent.com',
     role: 'parent',
     parentId: 'PAR301',
-    childStudentIds: ['STU202401', 'STU202402'],
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    phone: '+1 (555) 987-6543'
+    childStudentIds: ['STU202401'],
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+    phone: '+91 98421 98765'
   }
 ];
 
 export const INITIAL_STUDENTS: Student[] = [
   {
     id: 'STU202401',
-    rollNo: '24CS01',
-    name: 'Rahul Sharma',
-    email: 'rahul.sharma@student.edu',
-    department: 'Computer Science',
-    year: '2nd Year',
-    semester: 4,
-    section: 'A',
+    rollNo: '22CSE01',
+    name: 'Sreeman',
+    email: 'sreeman@student.annamalai.edu',
+    department: 'Department of Computer Science & Engineering',
+    year: '3rd Year',
+    semester: 5,
+    section: 'B Batch',
     parentId: 'PAR301',
-    parentName: 'Vikram Sharma',
-    parentPhone: '+1 (555) 987-6543',
+    parentName: 'Sundaram S',
+    parentPhone: '+91 98421 98765',
     avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150',
     approvalStatus: 'approved'
   },
   {
     id: 'STU202402',
-    rollNo: '24CS02',
-    name: 'Priya Sharma',
-    email: 'priya.sharma@student.edu',
-    department: 'Computer Science',
-    year: '1st Year',
-    semester: 2,
-    section: 'B',
+    rollNo: '22CSE02',
+    name: 'Ananya Verma',
+    email: 'ananya@student.annamalai.edu',
+    department: 'Department of Computer Science & Engineering',
+    year: '3rd Year',
+    semester: 5,
+    section: 'B Batch',
     parentId: 'PAR301',
-    parentName: 'Vikram Sharma',
-    parentPhone: '+1 (555) 987-6543',
+    parentName: 'Sundaram S',
+    parentPhone: '+91 98421 98765',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
     approvalStatus: 'approved'
   },
   {
     id: 'STU202403',
-    rollNo: '24CS03',
+    rollNo: '22CSE03',
     name: 'Aarav Patel',
     email: 'aarav.patel@student.edu',
-    department: 'Computer Science',
-    year: '2nd Year',
-    semester: 4,
-    section: 'A',
+    department: 'Department of Computer Science & Engineering',
+    year: '3rd Year',
+    semester: 5,
+    section: 'B Batch',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
     approvalStatus: 'approved'
   },
   {
     id: 'STU202404',
-    rollNo: '24CS04',
-    name: 'Ananya Verma',
-    email: 'ananya.verma@student.edu',
-    department: 'Computer Science',
-    year: '2nd Year',
-    semester: 4,
-    section: 'A',
+    rollNo: '22CSE04',
+    name: 'Rahul Sharma',
+    email: 'rahul.sharma@student.edu',
+    department: 'Department of Computer Science & Engineering',
+    year: '3rd Year',
+    semester: 5,
+    section: 'B Batch',
     avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
     approvalStatus: 'approved'
   }
@@ -121,166 +131,647 @@ export const INITIAL_STUDENTS: Student[] = [
 
 export const INITIAL_FACULTY: Faculty[] = [
   {
-    id: 'FAC101',
-    facultyCode: 'CS-FAC-01',
-    name: 'Prof. Robert Langdon',
-    email: 'robert.langdon@college.edu',
-    department: 'Computer Science',
-    designation: 'Associate Professor',
-    phone: '+1 (555) 234-5678',
-    subjectsHandled: ['SUB101', 'SUB103'],
+    id: 'FAC_MB',
+    facultyCode: 'FAC-501',
+    name: 'Dr. M. Balasubramanian',
+    email: 'balasubramanian@annamalai.edu',
+    department: 'Department of Computer Science & Engineering',
+    designation: 'Professor & Head',
+    phone: '+91 94431 12345',
+    subjectsHandled: ['SUB501', 'SUB511'],
     approvalStatus: 'approved'
   },
   {
-    id: 'FAC102',
-    facultyCode: 'CS-FAC-02',
-    name: 'Dr. Sarah Connor',
-    email: 'sarah.connor@college.edu',
-    department: 'Computer Science',
+    id: 'FAC_GA',
+    facultyCode: 'FAC-502',
+    name: 'Dr. G. Arulselvi',
+    email: 'arulselvi@annamalai.edu',
+    department: 'Department of Computer Science & Engineering',
+    designation: 'Associate Professor',
+    phone: '+91 94432 23456',
+    subjectsHandled: ['SUB502'],
+    approvalStatus: 'approved'
+  },
+  {
+    id: 'FAC_RS',
+    facultyCode: 'FAC-503',
+    name: 'Dr. R. Saminathan',
+    email: 'saminathan@annamalai.edu',
+    department: 'Department of Computer Science & Engineering',
+    designation: 'Professor',
+    phone: '+91 94433 34567',
+    subjectsHandled: ['SUB503'],
+    approvalStatus: 'approved'
+  },
+  {
+    id: 'FAC_RA',
+    facultyCode: 'FAC-504',
+    name: 'Dr. R. Arunkumar',
+    email: 'arunkumar@annamalai.edu',
+    department: 'Department of Computer Science & Engineering',
+    designation: 'Associate Professor',
+    phone: '+91 94434 45678',
+    subjectsHandled: ['SUB504'],
+    approvalStatus: 'approved'
+  },
+  {
+    id: 'FAC_AK',
+    facultyCode: 'FAC-505',
+    name: 'Dr. A. Kanthimathinathan',
+    email: 'kanthimathinathan@annamalai.edu',
+    department: 'Department of Computer Science & Engineering',
     designation: 'Assistant Professor',
-    phone: '+1 (555) 876-5432',
-    subjectsHandled: ['SUB102', 'SUB104'],
+    phone: '+91 94435 56789',
+    subjectsHandled: ['SUB505'],
+    approvalStatus: 'approved'
+  },
+  {
+    id: 'FAC_KK',
+    facultyCode: 'FAC-506',
+    name: 'Dr. K. Kavitha',
+    email: 'kavitha@annamalai.edu',
+    department: 'Department of Computer Science & Engineering',
+    designation: 'Professor',
+    phone: '+91 94436 67890',
+    subjectsHandled: ['SUB506', 'SUB508', 'SUB510'],
+    approvalStatus: 'approved'
+  },
+  {
+    id: 'FAC_AP',
+    facultyCode: 'FAC-507',
+    name: 'Dr. A. Punitha',
+    email: 'punitha@annamalai.edu',
+    department: 'Department of Computer Science & Engineering',
+    designation: 'Associate Professor',
+    phone: '+91 94437 78901',
+    subjectsHandled: ['SUB507'],
+    approvalStatus: 'approved'
+  },
+  {
+    id: 'FAC_ANS',
+    facultyCode: 'FAC-508',
+    name: 'Dr. AN. Sigappi',
+    email: 'sigappi@annamalai.edu',
+    department: 'Department of Computer Science & Engineering',
+    designation: 'Professor',
+    phone: '+91 94438 89012',
+    subjectsHandled: ['SUB508'],
+    approvalStatus: 'approved'
+  },
+  {
+    id: 'FAC_AS',
+    facultyCode: 'FAC-509',
+    name: 'Dr. A. Suhasini',
+    email: 'suhasini@annamalai.edu',
+    department: 'Department of Computer Science & Engineering',
+    designation: 'Professor',
+    phone: '+91 94439 90123',
+    subjectsHandled: ['SUB509'],
+    approvalStatus: 'approved'
+  },
+  {
+    id: 'FAC_TSS',
+    facultyCode: 'FAC-510',
+    name: 'Dr. T.S. Subashini',
+    email: 'subashini@annamalai.edu',
+    department: 'Department of Computer Science & Engineering',
+    designation: 'Professor',
+    phone: '+91 94440 01234',
+    subjectsHandled: ['SUB509'],
+    approvalStatus: 'approved'
+  },
+  {
+    id: 'FAC_BK',
+    facultyCode: 'FAC-511',
+    name: 'Dr. B. Kirubagari',
+    email: 'kirubagari@annamalai.edu',
+    department: 'Department of Computer Science & Engineering',
+    designation: 'Assistant Professor',
+    phone: '+91 94441 12345',
+    subjectsHandled: ['SUB509'],
+    approvalStatus: 'approved'
+  },
+  {
+    id: 'FAC_CA',
+    facultyCode: 'FAC-512',
+    name: 'Dr. C. Anbuananth',
+    email: 'anbuananth@annamalai.edu',
+    department: 'Department of Computer Science & Engineering',
+    designation: 'Associate Professor',
+    phone: '+91 94442 23456',
+    subjectsHandled: ['SUB510'],
     approvalStatus: 'approved'
   }
 ];
 
 export const INITIAL_SUBJECTS: Subject[] = [
   {
-    id: 'SUB101',
-    code: 'CS401',
-    name: 'Data Structures & Algorithms',
-    department: 'Computer Science',
-    semester: 4,
+    id: 'SUB501',
+    code: '22CSPC501',
+    name: 'Theory of Computation',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
     type: 'Lecture',
     credits: 4,
-    facultyId: 'FAC101',
-    facultyName: 'Prof. Robert Langdon'
+    facultyId: 'FAC_MB',
+    facultyName: 'Dr. M. Balasubramanian'
   },
   {
-    id: 'SUB102',
-    code: 'CS402',
-    name: 'Database Management Systems',
-    department: 'Computer Science',
-    semester: 4,
+    id: 'SUB502',
+    code: '22CSPC502',
+    name: 'Computer Graphics and Multimedia',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
     type: 'Lecture',
     credits: 4,
-    facultyId: 'FAC102',
-    facultyName: 'Dr. Sarah Connor'
+    facultyId: 'FAC_GA',
+    facultyName: 'Dr. G. Arulselvi'
   },
   {
-    id: 'SUB103',
-    code: 'CS401P',
-    name: 'DSA Lab & Practicals',
-    department: 'Computer Science',
-    semester: 4,
-    type: 'Practical',
-    credits: 2,
-    facultyId: 'FAC101',
-    facultyName: 'Prof. Robert Langdon'
+    id: 'SUB503',
+    code: '22CSPC503',
+    name: 'Computer Networks',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    type: 'Lecture',
+    credits: 4,
+    facultyId: 'FAC_RS',
+    facultyName: 'Dr. R. Saminathan'
   },
   {
-    id: 'SUB104',
-    code: 'CS402P',
-    name: 'DBMS Lab & Practicals',
-    department: 'Computer Science',
-    semester: 4,
+    id: 'SUB504',
+    code: '22CSPC504',
+    name: 'Microprocessors',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    type: 'Lecture',
+    credits: 4,
+    facultyId: 'FAC_RA',
+    facultyName: 'Dr. R. Arunkumar'
+  },
+  {
+    id: 'SUB505',
+    code: '22CSPE505',
+    name: 'Professional Elective I (Web Technology)',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    type: 'Lecture',
+    credits: 3,
+    facultyId: 'FAC_AK',
+    facultyName: 'Dr. A. Kanthimathinathan'
+  },
+  {
+    id: 'SUB506',
+    code: '22CSPE506',
+    name: 'Professional Elective II (Mobile App Development)',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    type: 'Lecture',
+    credits: 3,
+    facultyId: 'FAC_KK',
+    facultyName: 'Dr. K. Kavitha'
+  },
+  {
+    id: 'SUB507',
+    code: '22CSOE507',
+    name: 'Open Elective – I (Big Data Analytics)',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    type: 'Lecture',
+    credits: 3,
+    facultyId: 'FAC_AP',
+    facultyName: 'Dr. A. Punitha'
+  },
+  {
+    id: 'SUB508',
+    code: '22CSCP508',
+    name: 'Computer Graphics & Multimedia Lab [Ground Floor Lab]',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
     type: 'Practical',
     credits: 2,
-    facultyId: 'FAC102',
-    facultyName: 'Dr. Sarah Connor'
+    facultyId: 'FAC_KK',
+    facultyName: 'Dr. K. Kavitha (I/C), Dr. AN. Sigappi'
+  },
+  {
+    id: 'SUB509',
+    code: '22CSCP509',
+    name: 'Computer Networks Lab [UG Lab 1/2]',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    type: 'Practical',
+    credits: 2,
+    facultyId: 'FAC_AS',
+    facultyName: 'Dr. A. Suhasini (I/C), Dr. T.S. Subashini, Dr. B. Kirubagari'
+  },
+  {
+    id: 'SUB510',
+    code: '22CSCP510',
+    name: 'Microprocessors Lab [Annexure Lab]',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    type: 'Practical',
+    credits: 2,
+    facultyId: 'FAC_CA',
+    facultyName: 'Dr. C. Anbuananth (I/C), Dr. K. Kavitha'
+  },
+  {
+    id: 'SUB511',
+    code: '22ETIT511',
+    name: 'Industrial Training / Rural Internship / Innovation',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    type: 'Practical',
+    credits: 2,
+    facultyId: 'FAC_MB',
+    facultyName: 'Dr. M. Balasubramanian'
   }
 ];
 
 export const INITIAL_TIMETABLE: TimetableSlot[] = [
+  // MONDAY
   {
-    id: 'SLOT1',
+    id: 'SLOT_MON_1',
     dayOfWeek: 'Monday',
-    timeSlot: '09:00 AM - 10:00 AM',
-    subjectId: 'SUB101',
-    subjectName: 'Data Structures & Algorithms',
-    subjectCode: 'CS401',
+    timeSlot: '08.30 AM - 09.30 AM',
+    subjectId: 'SUB505',
+    subjectName: 'Professional Elective I (Web Technology)',
+    subjectCode: '22CSPE505',
     subjectType: 'Lecture',
-    facultyId: 'FAC101',
-    facultyName: 'Prof. Robert Langdon',
-    roomNo: 'LH-201',
-    department: 'Computer Science',
-    semester: 4,
-    section: 'A'
+    facultyId: 'FAC_AK',
+    facultyName: 'Dr. A. Kanthimathinathan',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
   },
   {
-    id: 'SLOT2',
+    id: 'SLOT_MON_2',
     dayOfWeek: 'Monday',
-    timeSlot: '10:15 AM - 11:15 AM',
-    subjectId: 'SUB102',
-    subjectName: 'Database Management Systems',
-    subjectCode: 'CS402',
+    timeSlot: '09.30 AM - 10.30 AM',
+    subjectId: 'SUB503',
+    subjectName: 'Computer Networks',
+    subjectCode: '22CSPC503',
     subjectType: 'Lecture',
-    facultyId: 'FAC102',
-    facultyName: 'Dr. Sarah Connor',
-    roomNo: 'LH-201',
-    department: 'Computer Science',
-    semester: 4,
-    section: 'A'
+    facultyId: 'FAC_RS',
+    facultyName: 'Dr. R. Saminathan',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
   },
   {
-    id: 'SLOT3',
+    id: 'SLOT_MON_3',
+    dayOfWeek: 'Monday',
+    timeSlot: '10.40 AM - 11.40 AM',
+    subjectId: 'SUB501',
+    subjectName: 'Theory of Computation',
+    subjectCode: '22CSPC501',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_MB',
+    facultyName: 'Dr. M. Balasubramanian',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_MON_4',
+    dayOfWeek: 'Monday',
+    timeSlot: '11.40 AM - 12.40 PM',
+    subjectId: 'SUB507',
+    subjectName: 'Open Elective – I (Big Data Analytics)',
+    subjectCode: '22CSOE507',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_AP',
+    facultyName: 'Dr. A. Punitha',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_MON_5',
+    dayOfWeek: 'Monday',
+    timeSlot: '01.30 PM - 02.30 PM',
+    subjectId: 'SUB506',
+    subjectName: 'Professional Elective II (Mobile App Development)',
+    subjectCode: '22CSPE506',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_KK',
+    facultyName: 'Dr. K. Kavitha',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_MON_6',
+    dayOfWeek: 'Monday',
+    timeSlot: '02.30 PM - 03.30 PM',
+    subjectId: 'SUB502',
+    subjectName: 'Computer Graphics and Multimedia',
+    subjectCode: '22CSPC502',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_GA',
+    facultyName: 'Dr. G. Arulselvi',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+
+  // TUESDAY
+  {
+    id: 'SLOT_TUE_1',
     dayOfWeek: 'Tuesday',
-    timeSlot: '02:00 PM - 05:00 PM',
-    subjectId: 'SUB103',
-    subjectName: 'DSA Lab & Practicals',
-    subjectCode: 'CS401P',
-    subjectType: 'Practical',
-    facultyId: 'FAC101',
-    facultyName: 'Prof. Robert Langdon',
-    roomNo: 'CS-LAB-3',
-    department: 'Computer Science',
-    semester: 4,
-    section: 'A'
+    timeSlot: '08.30 AM - 09.30 AM',
+    subjectId: 'SUB502',
+    subjectName: 'Computer Graphics and Multimedia',
+    subjectCode: '22CSPC502',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_GA',
+    facultyName: 'Dr. G. Arulselvi',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
   },
   {
-    id: 'SLOT4',
+    id: 'SLOT_TUE_2',
+    dayOfWeek: 'Tuesday',
+    timeSlot: '09.30 AM - 10.30 AM',
+    subjectId: 'SUB504',
+    subjectName: 'Microprocessors',
+    subjectCode: '22CSPC504',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_RA',
+    facultyName: 'Dr. R. Arunkumar',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_TUE_3',
+    dayOfWeek: 'Tuesday',
+    timeSlot: '10.40 AM - 11.40 AM',
+    subjectId: 'SUB503',
+    subjectName: 'Computer Networks',
+    subjectCode: '22CSPC503',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_RS',
+    facultyName: 'Dr. R. Saminathan',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_TUE_4',
+    dayOfWeek: 'Tuesday',
+    timeSlot: '11.40 AM - 12.40 PM',
+    subjectId: 'SUB506',
+    subjectName: 'Professional Elective II (Mobile App Development)',
+    subjectCode: '22CSPE506',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_KK',
+    facultyName: 'Dr. K. Kavitha',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_TUE_5',
+    dayOfWeek: 'Tuesday',
+    timeSlot: '01.30 PM - 04.30 PM',
+    subjectId: 'SUB508',
+    subjectName: 'Computer Graphics & Multimedia Lab [Ground Floor Lab]',
+    subjectCode: '22CSCP508',
+    subjectType: 'Practical',
+    facultyId: 'FAC_KK',
+    facultyName: 'Dr. K. Kavitha (I/C), Dr. AN. Sigappi',
+    roomNo: 'Ground Floor Lab',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+
+  // WEDNESDAY
+  {
+    id: 'SLOT_WED_1',
     dayOfWeek: 'Wednesday',
-    timeSlot: '09:00 AM - 10:00 AM',
-    subjectId: 'SUB101',
-    subjectName: 'Data Structures & Algorithms',
-    subjectCode: 'CS401',
-    subjectType: 'Lecture',
-    facultyId: 'FAC101',
-    facultyName: 'Prof. Robert Langdon',
-    roomNo: 'LH-201',
-    department: 'Computer Science',
-    semester: 4,
-    section: 'A'
-  },
-  {
-    id: 'SLOT5',
-    dayOfWeek: 'Thursday',
-    timeSlot: '02:00 PM - 05:00 PM',
-    subjectId: 'SUB104',
-    subjectName: 'DBMS Lab & Practicals',
-    subjectCode: 'CS402P',
+    timeSlot: '09.30 AM - 12.40 PM',
+    subjectId: 'SUB510',
+    subjectName: 'Microprocessors Lab [Annexure Lab]',
+    subjectCode: '22CSCP510',
     subjectType: 'Practical',
-    facultyId: 'FAC102',
-    facultyName: 'Dr. Sarah Connor',
-    roomNo: 'CS-LAB-1',
-    department: 'Computer Science',
-    semester: 4,
-    section: 'A'
+    facultyId: 'FAC_CA',
+    facultyName: 'Dr. C. Anbuananth (I/C), Dr. K. Kavitha',
+    roomNo: 'Annexure Lab',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
   },
   {
-    id: 'SLOT6',
-    dayOfWeek: 'Friday',
-    timeSlot: '11:30 AM - 12:30 PM',
-    subjectId: 'SUB102',
-    subjectName: 'Database Management Systems',
-    subjectCode: 'CS402',
+    id: 'SLOT_WED_2',
+    dayOfWeek: 'Wednesday',
+    timeSlot: '01.30 PM - 02.30 PM',
+    subjectId: 'SUB507',
+    subjectName: 'Open Elective – I (Big Data Analytics)',
+    subjectCode: '22CSOE507',
     subjectType: 'Lecture',
-    facultyId: 'FAC102',
-    facultyName: 'Dr. Sarah Connor',
-    roomNo: 'LH-201',
-    department: 'Computer Science',
-    semester: 4,
-    section: 'A'
+    facultyId: 'FAC_AP',
+    facultyName: 'Dr. A. Punitha',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_WED_3',
+    dayOfWeek: 'Wednesday',
+    timeSlot: '02.30 PM - 03.30 PM',
+    subjectId: 'SUB501',
+    subjectName: 'Theory of Computation',
+    subjectCode: '22CSPC501',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_MB',
+    facultyName: 'Dr. M. Balasubramanian',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_WED_4',
+    dayOfWeek: 'Wednesday',
+    timeSlot: '03.30 PM - 04.30 PM',
+    subjectId: 'SUB504',
+    subjectName: 'Microprocessors',
+    subjectCode: '22CSPC504',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_RA',
+    facultyName: 'Dr. R. Arunkumar',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+
+  // THURSDAY
+  {
+    id: 'SLOT_THU_1',
+    dayOfWeek: 'Thursday',
+    timeSlot: '08.30 AM - 09.30 AM',
+    subjectId: 'SUB503',
+    subjectName: 'Computer Networks',
+    subjectCode: '22CSPC503',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_RS',
+    facultyName: 'Dr. R. Saminathan',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_THU_2',
+    dayOfWeek: 'Thursday',
+    timeSlot: '09.30 AM - 10.30 AM',
+    subjectId: 'SUB506',
+    subjectName: 'Professional Elective II (Mobile App Development)',
+    subjectCode: '22CSPE506',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_KK',
+    facultyName: 'Dr. K. Kavitha',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_THU_3',
+    dayOfWeek: 'Thursday',
+    timeSlot: '10.40 AM - 11.40 AM',
+    subjectId: 'SUB505',
+    subjectName: 'Professional Elective I (Web Technology)',
+    subjectCode: '22CSPE505',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_AK',
+    facultyName: 'Dr. A. Kanthimathinathan',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_THU_4',
+    dayOfWeek: 'Thursday',
+    timeSlot: '11.40 AM - 12.40 PM',
+    subjectId: 'SUB504',
+    subjectName: 'Microprocessors',
+    subjectCode: '22CSPC504',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_RA',
+    facultyName: 'Dr. R. Arunkumar',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_THU_5',
+    dayOfWeek: 'Thursday',
+    timeSlot: '01.30 PM - 04.30 PM',
+    subjectId: 'SUB511',
+    subjectName: 'Industrial Training / Rural Internship / Innovation',
+    subjectCode: '22ETIT511',
+    subjectType: 'Practical',
+    facultyId: 'FAC_MB',
+    facultyName: 'Dr. M. Balasubramanian',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+
+  // FRIDAY
+  {
+    id: 'SLOT_FRI_1',
+    dayOfWeek: 'Friday',
+    timeSlot: '08.30 AM - 09.30 AM',
+    subjectId: 'SUB505',
+    subjectName: 'Professional Elective I (Web Technology)',
+    subjectCode: '22CSPE505',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_AK',
+    facultyName: 'Dr. A. Kanthimathinathan',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_FRI_2',
+    dayOfWeek: 'Friday',
+    timeSlot: '09.30 AM - 10.30 AM',
+    subjectId: 'SUB501',
+    subjectName: 'Theory of Computation',
+    subjectCode: '22CSPC501',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_MB',
+    facultyName: 'Dr. M. Balasubramanian',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_FRI_3',
+    dayOfWeek: 'Friday',
+    timeSlot: '10.40 AM - 11.40 AM',
+    subjectId: 'SUB507',
+    subjectName: 'Open Elective – I (Big Data Analytics)',
+    subjectCode: '22CSOE507',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_AP',
+    facultyName: 'Dr. A. Punitha',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_FRI_4',
+    dayOfWeek: 'Friday',
+    timeSlot: '11.40 AM - 12.40 PM',
+    subjectId: 'SUB502',
+    subjectName: 'Computer Graphics and Multimedia',
+    subjectCode: '22CSPC502',
+    subjectType: 'Lecture',
+    facultyId: 'FAC_GA',
+    facultyName: 'Dr. G. Arulselvi',
+    roomNo: 'Hall - 2211',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
+  },
+  {
+    id: 'SLOT_FRI_5',
+    dayOfWeek: 'Friday',
+    timeSlot: '01.30 PM - 04.30 PM',
+    subjectId: 'SUB509',
+    subjectName: 'Computer Networks Lab [UG Lab 1/2]',
+    subjectCode: '22CSCP509',
+    subjectType: 'Practical',
+    facultyId: 'FAC_AS',
+    facultyName: 'Dr. A. Suhasini (I/C), Dr. T.S. Subashini, Dr. B. Kirubagari',
+    roomNo: 'UG Lab 1/2',
+    department: 'Department of Computer Science & Engineering',
+    semester: 5,
+    section: 'B Batch'
   }
 ];
 
@@ -305,10 +796,8 @@ export function generateSeedAttendance(): AttendanceRecord[] {
     const daySlots = INITIAL_TIMETABLE.filter(t => t.dayOfWeek === dayName);
 
     daySlots.forEach(slot => {
-      // Deterministic pseudo-random status for Rahul Sharma (STU202401)
       let status: 'present' | 'absent' | 'late' | 'excused' = 'present';
       
-      // Make a few days absent/late to show realistic stats
       if ((i % 7 === 1) && slot.subjectType === 'Lecture') {
         status = 'absent';
       } else if (i % 9 === 0) {
@@ -333,7 +822,6 @@ export function generateSeedAttendance(): AttendanceRecord[] {
         method: isToday ? 'qr_code' : 'manual'
       });
 
-      // Also create records for Priya Sharma (STU202402)
       records.push({
         id: `att_${dateStr}_${slot.id}_STU202402`,
         date: dateStr,
@@ -357,7 +845,7 @@ export const INITIAL_LEAVES: LeaveRequest[] = [
   {
     id: 'LV101',
     applicantId: 'usr_stu1',
-    applicantName: 'Rahul Sharma',
+    applicantName: 'Sreeman',
     applicantRole: 'student',
     studentId: 'STU202401',
     startDate: new Date(Date.now() - 86400000 * 12).toISOString().split('T')[0],
@@ -366,22 +854,9 @@ export const INITIAL_LEAVES: LeaveRequest[] = [
     reason: 'High fever and doctor recommended rest.',
     status: 'approved',
     appliedOn: new Date(Date.now() - 86400000 * 13).toISOString(),
-    approvedBy: 'Dr. Arthur Vance',
+    approvedBy: 'Dr. M. Balasubramanian',
     approvedOn: new Date(Date.now() - 86400000 * 12).toISOString(),
     remarks: 'Medical certificate submitted.'
-  },
-  {
-    id: 'LV102',
-    applicantId: 'usr_stu1',
-    applicantName: 'Rahul Sharma',
-    applicantRole: 'student',
-    studentId: 'STU202401',
-    startDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
-    endDate: new Date(Date.now() + 86400000 * 4).toISOString().split('T')[0],
-    leaveType: 'On Duty / Event',
-    reason: 'Representing college in Inter-University Tech Hackathon.',
-    status: 'pending',
-    appliedOn: new Date().toISOString()
   }
 ];
 
@@ -390,48 +865,21 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
     id: 'LOG1',
     timestamp: new Date().toISOString(),
     userId: 'usr_admin1',
-    userName: 'Dr. Arthur Vance',
+    userName: 'Dr. M. Balasubramanian',
     userRole: 'admin',
-    action: 'System Initialized',
-    details: 'Initial database seed loaded successfully with multi-role configurations.'
-  },
-  {
-    id: 'LOG2',
-    timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-    userId: 'usr_fac1',
-    userName: 'Prof. Robert Langdon',
-    userRole: 'faculty',
-    action: 'QR Session Created',
-    details: 'Generated live 5-min QR attendance session for Data Structures & Algorithms (LH-201)'
-  },
-  {
-    id: 'LOG3',
-    timestamp: new Date(Date.now() - 1800000).toISOString(),
-    userId: 'usr_stu1',
-    userName: 'Rahul Sharma',
-    userRole: 'student',
-    action: 'QR Attendance Logged',
-    details: 'Scanned QR code and logged Present for CS401'
+    action: 'Annamalai University CSE V Sem Timetable Seeded',
+    details: 'System initialized with official Annamalai University B.E CSE Semester V B Batch (Hall - 2211) timetable and faculty schedule.'
   }
 ];
 
 export const INITIAL_PARENTS: ParentRecord[] = [
   {
     id: 'PAR301',
-    name: 'Vikram Sharma',
-    email: 'vikram.sharma@parent.com',
-    phone: '+1 (555) 987-6543',
-    childRollNo: '24CS01',
-    childName: 'Rahul Sharma',
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'PAR302',
-    name: 'Suresh Patel',
-    email: 'suresh.patel@parent.com',
-    phone: '+1 (555) 321-7654',
-    childRollNo: '24CS03',
-    childName: 'Aarav Patel',
+    name: 'Sundaram S',
+    email: 'sundaram@parent.com',
+    phone: '+91 98421 98765',
+    childRollNo: '22CSE01',
+    childName: 'Sreeman',
     createdAt: new Date().toISOString()
   }
 ];
@@ -440,26 +888,7 @@ export const INITIAL_DEPARTMENTS: Department[] = [
   {
     id: 'DEP101',
     code: 'CSE',
-    name: 'Computer Science & Engineering',
-    hodName: 'Dr. Arthur Vance'
-  },
-  {
-    id: 'DEP102',
-    code: 'ECE',
-    name: 'Electronics & Communication',
-    hodName: 'Dr. Alan Turing'
-  },
-  {
-    id: 'DEP103',
-    code: 'MECH',
-    name: 'Mechanical Engineering',
-    hodName: 'Prof. Nikola Tesla'
-  },
-  {
-    id: 'DEP104',
-    code: 'CIVIL',
-    name: 'Civil Engineering',
-    hodName: 'Dr. Isambard Brunel'
+    name: 'Department of Computer Science & Engineering',
+    hodName: 'Dr. M. Balasubramanian'
   }
 ];
-
