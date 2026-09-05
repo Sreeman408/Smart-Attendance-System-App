@@ -264,7 +264,7 @@ export const AdminDashboard: React.FC<Props> = ({
 
   if (activeTab === 'reports') return <ReportsManager students={students} subjects={subjects} />;
   if (activeTab === 'leaves') return <LeaveManager user={{ id: 'admin', name: 'Admin', role: 'admin', email: 'admin@college.edu' }} onLeaveUpdated={onDataChanged} />;
-  if (activeTab === 'approvals') return <PendingApprovalsManager />;
+  if (activeTab === 'approvals') return <PendingApprovalsManager onDataChanged={onDataChanged} />;
   if (activeTab === 'saturday') return <SaturdayConfigManager />;
   if (activeTab === 'bulk') return <BulkUploadModal isOpen={true} onClose={() => onTabChange('dashboard')} onSuccess={onDataChanged} />;
 
@@ -331,7 +331,7 @@ export const AdminDashboard: React.FC<Props> = ({
       </div>
 
       {/* RENDER SUBSECTION: PENDING APPROVALS */}
-      {subSection === 'approvals' && <PendingApprovalsManager />}
+      {subSection === 'approvals' && <PendingApprovalsManager onDataChanged={onDataChanged} />}
 
       {/* RENDER SUBSECTION: SATURDAY CONFIG */}
       {subSection === 'saturday' && <SaturdayConfigManager />}

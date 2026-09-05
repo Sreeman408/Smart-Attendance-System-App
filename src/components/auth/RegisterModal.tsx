@@ -104,8 +104,12 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       verifiedEmail: true
     };
 
-    await submitRegistrationRequestDB(reqData);
+    const savedOk = await submitRegistrationRequestDB(reqData);
     setLoading(false);
+    if (!savedOk) {
+      setErrorMsg('Failed to save registration application. Please try again.');
+      return;
+    }
     setStep('pending');
   };
 

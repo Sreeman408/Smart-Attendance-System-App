@@ -3,7 +3,11 @@ import { RegistrationRequest } from '../../types';
 import { fetchRegistrationRequestsFromDB, updateRegistrationStatusDB } from '../../services/dbService';
 import { CheckCircle2, XCircle, Clock, Search, RefreshCw, UserCheck, GraduationCap, Building2, Calendar, Phone, Mail } from 'lucide-react';
 
-export const PendingApprovalsManager: React.FC = () => {
+interface PendingApprovalsManagerProps {
+  onDataChanged?: () => void;
+}
+
+export const PendingApprovalsManager: React.FC<PendingApprovalsManagerProps> = ({ onDataChanged }) => {
   const [requests, setRequests] = useState<RegistrationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -15,6 +19,7 @@ export const PendingApprovalsManager: React.FC = () => {
     const data = await fetchRegistrationRequestsFromDB();
     setRequests(data);
     setLoading(false);
+    if (onDataChanged) onDataChanged();
   };
 
   useEffect(() => {
@@ -26,7 +31,8 @@ export const PendingApprovalsManager: React.FC = () => {
     if (success) {
       setActionMsg(`Request ${status === 'approved' ? 'Approved' : 'Rejected'} successfully!`);
       setTimeout(() => setActionMsg(''), 4000);
-      loadRequests();
+      await loadRequests();
+      if (onDataChanged) onDataChanged();
     }
   };
 

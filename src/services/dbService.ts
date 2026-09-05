@@ -416,71 +416,130 @@ export async function addAttendanceRecordToDB(record: AttendanceRecord): Promise
 // 7. REGISTRATION REQUESTS & APPROVAL QUEUE SERVICE
 // -------------------------------------------------------------
 export async function fetchRegistrationRequestsFromDB(): Promise<RegistrationRequest[]> {
+  const localCached = await getCachedData<RegistrationRequest[]>(PREF_KEYS.REGISTRATIONS, []);
   const supabase = getSupabaseClient();
+
+  const requestsMap = new Map<string, RegistrationRequest>();
+
+  // 1. Always populate with local cached records first
+  for (const req of localCached) {
+    if (req && req.id) {
+      requestsMap.set(req.id, req);
+    }
+  }
+
+  // 2. Fetch from Supabase if connected and merge seamlessly
   if (supabase) {
     try {
       const { data, error } = await supabase.from('registration_requests').select('*').order('submitted_at', { ascending: false });
-      if (!error && data && data.length > 0) {
-        const mapped: RegistrationRequest[] = data.map((d: any) => ({
-          id: d.id,
-          role: d.role as any,
-          name: d.name,
-          email: d.email,
-          rollNo: d.roll_no,
-          facultyCode: d.faculty_code,
-          department: d.department,
-          year: d.year,
-          semester: d.semester,
-          section: d.section,
-          designation: d.designation,
-          phone: d.phone,
-          parentName: d.parent_name,
-          parentPhone: d.parent_phone,
-          status: d.status as ApprovalStatus,
-          submittedAt: d.submitted_at,
-          verifiedEmail: d.verified_email || false
-        }));
-        await setCachedData(PREF_KEYS.REGISTRATIONS, mapped);
-        return mapped;
+      if (error) {
+        console.warn('Supabase fetch registration_requests error:', error);
+      } else if (data && Array.isArray(data)) {
+        for (const d of data) {
+          const remoteReq: RegistrationRequest = {
+            id: d.id,
+            role: d.role as any,
+            name: d.name,
+            email: d.email,
+            rollNo: d.roll_no || d.rollNo,
+            facultyCode: d.faculty_code || d.facultyCode,
+            department: d.department,
+            year: d.year,
+            semester: d.semester,
+            section: d.section,
+            designation: d.designation,
+            phone: d.phone,
+            parentName: d.parent_name || d.parentName,
+            parentPhone: d.parent_phone || d.parentPhone,
+            status: d.status as ApprovalStatus,
+            submittedAt: d.submitted_at || d.submittedAt || new Date().toISOString(),
+            verifiedEmail: d.verified_email || d.verifiedEmail || false
+          };
+
+          const existingLocal = requestsMap.get(remoteReq.id);
+          if (!existingLocal) {
+            requestsMap.set(remoteReq.id, remoteReq);
+          } else {
+            // Merge remote with local, allowing updated status from remote or local
+            requestsMap.set(remoteReq.id, {
+              ...existingLocal,
+              ...remoteReq,
+              status: remoteReq.status || existingLocal.status
+            });
+          }
+        }
       }
     } catch (e) {
-      console.warn('Fetch registration requests error:', e);
+      console.warn('Supabase fetch registration_requests exception, serving local cache:', e);
     }
   }
-  return getCachedData<RegistrationRequest[]>(PREF_KEYS.REGISTRATIONS, []);
+
+  const merged = Array.from(requestsMap.values()).sort((a, b) => {
+    const timeA = new Date(a.submittedAt).getTime() || 0;
+    const timeB = new Date(b.submittedAt).getTime() || 0;
+    return timeB - timeA;
+  });
+
+  // Keep local cache synced with merged set
+  await setCachedData(PREF_KEYS.REGISTRATIONS, merged);
+  return merged;
 }
 
 export async function submitRegistrationRequestDB(req: RegistrationRequest): Promise<boolean> {
+  let localOk = false;
+  let supabaseOk = false;
+
+  // 1. Save to local cache ALWAYS
+  try {
+    const cached = await getCachedData<RegistrationRequest[]>(PREF_KEYS.REGISTRATIONS, []);
+    const idx = cached.findIndex(r => r.id === req.id);
+    if (idx >= 0) {
+      cached[idx] = req;
+    } else {
+      cached.unshift(req);
+    }
+    await setCachedData(PREF_KEYS.REGISTRATIONS, cached);
+    localOk = true;
+  } catch (e) {
+    console.error('Local cache save failed for registration request:', e);
+  }
+
+  // 2. Attempt Supabase insert / upsert
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      await supabase.from('registration_requests').upsert({
+      const payload = {
         id: req.id,
         role: req.role,
         name: req.name,
         email: req.email,
-        roll_no: req.rollNo,
-        faculty_code: req.facultyCode,
-        department: req.department,
-        year: req.year,
-        semester: req.semester,
-        section: req.section,
-        designation: req.designation,
-        phone: req.phone,
-        parent_name: req.parentName,
-        parent_phone: req.parentPhone,
+        roll_no: req.rollNo || null,
+        faculty_code: req.facultyCode || null,
+        department: req.department || 'Computer Science',
+        year: req.year || null,
+        semester: req.semester || null,
+        section: req.section || null,
+        designation: req.designation || null,
+        phone: req.phone || null,
+        parent_name: req.parentName || null,
+        parent_phone: req.parentPhone || null,
         status: req.status,
         submitted_at: req.submittedAt,
         verified_email: req.verifiedEmail
-      });
+      };
+      const { error } = await supabase.from('registration_requests').upsert(payload);
+      if (error) {
+        console.error('Supabase registration_requests upsert error:', error);
+      } else {
+        supabaseOk = true;
+      }
     } catch (e) {
-      console.error('Submit registration error:', e);
+      console.error('Supabase registration_requests upsert exception:', e);
     }
   }
-  const cached = await getCachedData<RegistrationRequest[]>(PREF_KEYS.REGISTRATIONS, []);
-  cached.unshift(req);
-  await setCachedData(PREF_KEYS.REGISTRATIONS, cached);
-  return true;
+
+  // Return success if at least local save succeeded
+  return localOk || supabaseOk;
 }
 
 export async function updateRegistrationStatusDB(requestId: string, status: ApprovalStatus): Promise<boolean> {
@@ -500,7 +559,7 @@ export async function updateRegistrationStatusDB(requestId: string, status: Appr
     }
   }
 
-  // If approved, add student or faculty record
+  // If approved, create active student or faculty record
   if (status === 'approved') {
     if (target.role === 'student') {
       const newStudent: Student = {
@@ -508,7 +567,7 @@ export async function updateRegistrationStatusDB(requestId: string, status: Appr
         rollNo: target.rollNo || `24CS${Math.floor(10 + Math.random() * 90)}`,
         name: target.name,
         email: target.email,
-        department: target.department,
+        department: target.department || 'Computer Science',
         year: target.year || '1st Year',
         semester: target.semester || 1,
         section: target.section || 'A',
@@ -517,13 +576,27 @@ export async function updateRegistrationStatusDB(requestId: string, status: Appr
         approvalStatus: 'approved'
       };
       await saveStudentToDB(newStudent);
+
+      // Link parent account if details supplied
+      if (target.parentName || target.parentPhone) {
+        const newParent: ParentRecord = {
+          id: `PAR_${Date.now()}`,
+          name: target.parentName || `Parent of ${target.name}`,
+          email: `parent.${target.email}`,
+          phone: target.parentPhone || '',
+          childRollNo: newStudent.rollNo,
+          childName: newStudent.name,
+          createdAt: new Date().toISOString()
+        };
+        await saveParentToDB(newParent);
+      }
     } else if (target.role === 'faculty') {
       const newFaculty: Faculty = {
         id: `FAC_${Date.now()}`,
         facultyCode: target.facultyCode || `FAC-${Math.floor(100 + Math.random() * 900)}`,
         name: target.name,
         email: target.email,
-        department: target.department,
+        department: target.department || 'Computer Science',
         designation: target.designation || 'Lecturer',
         phone: target.phone || '',
         subjectsHandled: [],

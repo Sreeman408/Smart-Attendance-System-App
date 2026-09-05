@@ -73,12 +73,45 @@ export async function loginUser(emailOrId: string, role: Role): Promise<AuthResu
       return { success: true, message: `Welcome back, ${found.name}!`, user: stuUser };
     }
 
-    // Check if in pending registration queue
+    // Check if in registration queue
     const pendingReqs = await fetchRegistrationRequestsFromDB();
     const pendingFound = pendingReqs.find(r =>
       r.role === 'student' && (r.email.toLowerCase() === input || r.rollNo?.toLowerCase() === input)
     );
     if (pendingFound) {
+      if (pendingFound.status === 'approved') {
+        const approvedStudent: Student = {
+          id: `STU_${Date.now()}`,
+          rollNo: pendingFound.rollNo || `24CS${Math.floor(10 + Math.random() * 90)}`,
+          name: pendingFound.name,
+          email: pendingFound.email,
+          department: pendingFound.department || 'Computer Science',
+          year: pendingFound.year || '1st Year',
+          semester: pendingFound.semester || 1,
+          section: pendingFound.section || 'A',
+          parentName: pendingFound.parentName,
+          parentPhone: pendingFound.parentPhone,
+          approvalStatus: 'approved'
+        };
+        await saveStudentToDB(approvedStudent);
+        const stuUser: User = {
+          id: `usr_${approvedStudent.id}`,
+          name: approvedStudent.name,
+          email: approvedStudent.email,
+          role: 'student',
+          studentId: approvedStudent.id,
+          department: approvedStudent.department,
+          approvalStatus: 'approved'
+        };
+        await saveActiveSession(stuUser);
+        return { success: true, message: `Welcome back, ${approvedStudent.name}!`, user: stuUser };
+      }
+      if (pendingFound.status === 'rejected') {
+        return {
+          success: false,
+          message: 'Your registration application was rejected by Admin. Please contact department head.'
+        };
+      }
       return {
         success: false,
         pendingApproval: true,
@@ -121,6 +154,38 @@ export async function loginUser(emailOrId: string, role: Role): Promise<AuthResu
       r.role === 'faculty' && (r.email.toLowerCase() === input || r.facultyCode?.toLowerCase() === input)
     );
     if (pendingFound) {
+      if (pendingFound.status === 'approved') {
+        const approvedFaculty: Faculty = {
+          id: `FAC_${Date.now()}`,
+          facultyCode: pendingFound.facultyCode || `FAC-${Math.floor(100 + Math.random() * 900)}`,
+          name: pendingFound.name,
+          email: pendingFound.email,
+          department: pendingFound.department || 'Computer Science',
+          designation: pendingFound.designation || 'Lecturer',
+          phone: pendingFound.phone || '',
+          subjectsHandled: [],
+          approvalStatus: 'approved'
+        };
+        await saveFacultyToDB(approvedFaculty);
+        const facUser: User = {
+          id: `usr_${approvedFaculty.id}`,
+          name: approvedFaculty.name,
+          email: approvedFaculty.email,
+          role: 'faculty',
+          facultyId: approvedFaculty.id,
+          department: approvedFaculty.department,
+          phone: approvedFaculty.phone,
+          approvalStatus: 'approved'
+        };
+        await saveActiveSession(facUser);
+        return { success: true, message: `Welcome back, ${approvedFaculty.name}!`, user: facUser };
+      }
+      if (pendingFound.status === 'rejected') {
+        return {
+          success: false,
+          message: 'Your faculty application was rejected by Admin.'
+        };
+      }
       return {
         success: false,
         pendingApproval: true,
