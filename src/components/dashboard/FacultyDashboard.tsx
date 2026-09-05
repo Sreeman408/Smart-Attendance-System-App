@@ -5,6 +5,7 @@ import { ReportsManager } from '../reports/ReportsManager';
 import { LeaveManager } from '../leaves/LeaveManager';
 import { CheckSquare, QrCode, Clock, Users, CheckCircle2, Save, Calendar, Download, AlertCircle, FileSpreadsheet, MapPin } from 'lucide-react';
 import { addAttendanceRecordToDB, fetchAttendanceRecordsFromDB, fetchSaturdayConfigFromDB, addAuditLogDB } from '../../services/dbService';
+import { sortStudentsByRollNumber } from '../../utils/sortingUtils';
 import * as XLSX from 'xlsx';
 
 interface Props {
@@ -24,6 +25,7 @@ export const FacultyDashboard: React.FC<Props> = ({
   activeTab,
   onTabChange
 }) => {
+  const sortedStudents = sortStudentsByRollNumber(students);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id || '');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [isSaturdaySession, setIsSaturdaySession] = useState<boolean>(false);
@@ -111,7 +113,7 @@ export const FacultyDashboard: React.FC<Props> = ({
 
     const subjectRecords = allAttendance.filter(r => r.subjectId === currentSubject.id);
 
-    const reportRows = students.map(st => {
+    const reportRows = sortedStudents.map(st => {
       const studentRecs = subjectRecords.filter(r => r.studentId === st.id);
       const totalClasses = studentRecs.length;
       const attendedClasses = studentRecs.filter(r => r.status === 'present').length;
@@ -395,7 +397,7 @@ export const FacultyDashboard: React.FC<Props> = ({
         </div>
 
         <div className="space-y-2">
-          {students.map(st => {
+          {sortedStudents.map(st => {
             const currentStatus = attendanceMap[st.id] || 'present';
             const studentSatRecs = allAttendance.filter(r => r.studentId === st.id && (r.isSaturday || new Date(r.date).getDay() === 6));
             const satPresentCount = studentSatRecs.filter(r => r.status === 'present' || r.status === 'late').length;

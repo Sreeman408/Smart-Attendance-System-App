@@ -5,6 +5,7 @@ import { LeaveManager } from '../leaves/LeaveManager';
 import { ShortageAlertBanner } from '../common/ShortageAlertBanner';
 import { HeartHandshake, PhoneCall, Mail, Clock, Calendar } from 'lucide-react';
 import { calculateOverallAttendance } from '../../utils/attendance';
+import { sortStudentsByRollNumber } from '../../utils/sortingUtils';
 
 interface Props {
   parentUser: User;
@@ -192,7 +193,7 @@ export const ParentDashboard: React.FC<Props> = ({
             onChange={e => onSelectChild(e.target.value)}
             className="px-3 py-1.5 bg-white text-slate-900 rounded-xl text-xs font-bold focus:outline-none cursor-pointer"
           >
-            {students.map(s => (
+            {sortStudentsByRollNumber(students).map(s => (
               <option key={s.id} value={s.id}>
                 {s.name} ({s.rollNo}) - Sem {s.semester}
               </option>

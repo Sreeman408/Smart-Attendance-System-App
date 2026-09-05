@@ -10,6 +10,7 @@ import {
   INITIAL_PARENTS, INITIAL_DEPARTMENTS
 } from '../data/initialData';
 import { Preferences } from '@capacitor/preferences';
+import { compareRollNumbers } from '../utils/sortingUtils';
 
 // Cache keys for Capacitor Preferences
 const PREF_KEYS = {
@@ -180,27 +181,71 @@ export async function fetchCloudRecords<T>(entityType: string): Promise<T[] | nu
 // -------------------------------------------------------------
 export async function fetchStudentsFromDB(): Promise<Student[]> {
   const cloudData = await fetchCloudRecords<any>('students');
+  const studentMap = new Map<string, Student>();
+
   if (cloudData !== null) {
-    const mapped: Student[] = cloudData.map((d: any) => ({
-      id: d.id,
-      rollNo: d.roll_no || d.rollNo,
-      name: d.name,
-      email: d.email,
-      department: d.department || 'Computer Science',
-      year: d.year || '2nd Year',
-      semester: d.semester || 4,
-      section: d.section || 'A',
-      parentId: d.parent_id || d.parentId,
-      parentName: d.parent_name || d.parentName,
-      parentPhone: d.parent_phone || d.parentPhone,
-      avatar: d.avatar,
-      approvalStatus: d.approval_status || d.approvalStatus || 'approved',
-      passwordHash: d.password_hash || d.passwordHash
-    }));
-    await setCachedData(PREF_KEYS.STUDENTS, mapped);
-    return mapped;
+    for (const d of cloudData) {
+      const roll = (d.roll_no || d.rollNo || d.id || '').trim();
+      studentMap.set(roll || d.id, {
+        id: d.id,
+        rollNo: roll,
+        name: d.name,
+        email: d.email,
+        department: d.department || 'Department of Computer Science & Engineering',
+        year: d.year || '3rd Year',
+        semester: d.semester || 5,
+        section: d.section || 'B',
+        parentId: d.parent_id || d.parentId,
+        parentName: d.parent_name || d.parentName,
+        parentPhone: d.parent_phone || d.parentPhone,
+        avatar: d.avatar,
+        approvalStatus: d.approval_status || d.approvalStatus || 'approved',
+        passwordHash: d.password_hash || d.passwordHash
+      });
+    }
   }
-  return getCachedData<Student[]>(PREF_KEYS.STUDENTS, INITIAL_STUDENTS);
+
+  // Also query native users table in Supabase where role = 'student'
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data: userStudents, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('role', 'student');
+      if (!error && Array.isArray(userStudents)) {
+        for (const u of userStudents) {
+          const roll = (u.roll || u.login_id || u.id || '').trim();
+          if (!studentMap.has(roll)) {
+            studentMap.set(roll, {
+              id: u.id,
+              rollNo: roll,
+              name: u.name,
+              email: u.email || `${roll}@college.edu`,
+              department: u.dept_id === 'cse' ? 'Department of Computer Science & Engineering' : (u.dept_id || 'Department of Computer Science & Engineering'),
+              year: '3rd Year',
+              semester: 5,
+              section: 'B',
+              approvalStatus: 'approved',
+              passwordHash: u.password_hash
+            });
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  let resultList = Array.from(studentMap.values());
+  if (resultList.length === 0) {
+    resultList = await getCachedData<Student[]>(PREF_KEYS.STUDENTS, INITIAL_STUDENTS);
+  }
+
+  // Natural numeric sorting by roll number
+  resultList.sort((a, b) => compareRollNumbers(a.rollNo, b.rollNo));
+  await setCachedData(PREF_KEYS.STUDENTS, resultList);
+  return resultList;
 }
 
 export async function saveStudentToDB(student: Student): Promise<boolean> {
@@ -249,13 +294,13 @@ export async function deleteStudentFromDB(id: string): Promise<boolean> {
 // -------------------------------------------------------------
 export async function fetchFacultyFromDB(): Promise<Faculty[]> {
   const cloudData = await fetchCloudRecords<any>('faculty');
-  if (cloudData !== null) {
+  if (cloudData !== null && cloudData.length > 0) {
     const mapped: Faculty[] = cloudData.map((d: any) => ({
       id: d.id,
       facultyCode: d.faculty_code || d.facultyCode,
       name: d.name,
       email: d.email,
-      department: d.department || 'Computer Science',
+      department: d.department || 'Department of Computer Science & Engineering',
       designation: d.designation || 'Lecturer',
       phone: d.phone || '',
       subjectsHandled: d.subjects_handled || d.subjectsHandled || [],
@@ -306,13 +351,13 @@ export async function deleteFacultyFromDB(id: string): Promise<boolean> {
 // -------------------------------------------------------------
 export async function fetchSubjectsFromDB(): Promise<Subject[]> {
   const cloudData = await fetchCloudRecords<any>('subjects');
-  if (cloudData !== null) {
+  if (cloudData !== null && cloudData.length > 0) {
     const mapped: Subject[] = cloudData.map((d: any) => ({
       id: d.id,
       code: d.code,
       name: d.name,
-      department: d.department || 'Computer Science',
-      semester: d.semester || 4,
+      department: d.department || 'Department of Computer Science & Engineering',
+      semester: d.semester || 5,
       type: d.type as any,
       credits: d.credits || 3,
       facultyId: d.faculty_id || d.facultyId || '',
@@ -359,21 +404,21 @@ export async function deleteSubjectFromDB(id: string): Promise<boolean> {
 // -------------------------------------------------------------
 export async function fetchTimetableFromDB(): Promise<TimetableSlot[]> {
   const cloudData = await fetchCloudRecords<any>('timetable');
-  if (cloudData !== null) {
+  if (cloudData !== null && cloudData.length > 0) {
     const mapped: TimetableSlot[] = cloudData.map((d: any) => ({
       id: d.id,
       dayOfWeek: d.day_of_week || d.dayOfWeek || d.day || 'Monday',
       timeSlot: d.time_slot || d.timeSlot || d.time || '09:00 AM - 10:00 AM',
-      subjectId: d.subject_id || d.subjectId || d.course_id || 'SUB101',
+      subjectId: d.subject_id || d.subjectId || d.course_id || 'SUB501',
       subjectName: d.subject_name || d.subjectName || '',
       subjectCode: d.subject_code || d.subjectCode || '',
       subjectType: d.subject_type || d.subjectType || 'Lecture',
-      facultyId: d.faculty_id || d.facultyId || d.staff_id || 'FAC101',
+      facultyId: d.faculty_id || d.facultyId || d.staff_id || 'FAC_MB',
       facultyName: d.faculty_name || d.facultyName || '',
-      roomNo: d.room_no || d.roomNo || d.classroom || 'LH-1',
-      department: d.department || 'Computer Science',
-      semester: d.semester || 4,
-      section: d.section || 'A'
+      roomNo: d.room_no || d.roomNo || d.classroom || 'Hall - 2211',
+      department: d.department || 'Department of Computer Science & Engineering',
+      semester: d.semester || 5,
+      section: d.section || 'B Batch'
     }));
     await setCachedData(PREF_KEYS.TIMETABLE, mapped);
     return mapped;

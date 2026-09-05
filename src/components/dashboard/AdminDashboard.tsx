@@ -20,6 +20,7 @@ import {
   fetchAttendanceRecordsFromDB
 } from '../../services/dbService';
 import { calculateOverallAttendance } from '../../utils/attendance';
+import { sortStudentsByRollNumber } from '../../utils/sortingUtils';
 import * as XLSX from 'xlsx';
 
 interface Props {
@@ -86,8 +87,10 @@ export const AdminDashboard: React.FC<Props> = ({
     setAttendanceList(atts);
   };
 
+  const sortedStudents = sortStudentsByRollNumber(students);
+
   // Calculate Student Attendance Stats for Analytics
-  const studentStats = students.map(st => {
+  const studentStats = sortedStudents.map(st => {
     const stAtts = attendanceList.filter(a => a.studentId === st.id);
     const summary = calculateOverallAttendance(stAtts, subjects);
     return {
@@ -262,7 +265,7 @@ export const AdminDashboard: React.FC<Props> = ({
     setModalMode('edit');
   };
 
-  if (activeTab === 'reports') return <ReportsManager students={students} subjects={subjects} />;
+  if (activeTab === 'reports') return <ReportsManager students={sortedStudents} subjects={subjects} />;
   if (activeTab === 'leaves') return <LeaveManager user={{ id: 'admin', name: 'Admin', role: 'admin', email: 'admin@college.edu' }} onLeaveUpdated={onDataChanged} />;
   if (activeTab === 'approvals') return <PendingApprovalsManager onDataChanged={onDataChanged} />;
   if (activeTab === 'saturday') return <SaturdayConfigManager />;
@@ -881,7 +884,7 @@ export const AdminDashboard: React.FC<Props> = ({
                     </tr>
                   ))}
 
-                  {crudTab === 'students' && students.map(st => (
+                  {crudTab === 'students' && sortedStudents.map(st => (
                     <tr key={st.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                       <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{st.rollNo}</td>
                       <td className="p-3 font-bold text-slate-900 dark:text-white">{st.name}</td>

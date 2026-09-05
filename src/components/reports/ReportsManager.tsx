@@ -5,6 +5,7 @@ import {
 import { Student, Subject, AttendanceRecord, AuditLog } from '../../types';
 import { calculateOverallAttendance } from '../../utils/attendance';
 import { getAuditLogs, getAttendanceRecords } from '../../services/storage';
+import { sortStudentsByRollNumber } from '../../utils/sortingUtils';
 import * as XLSX from 'xlsx';
 
 interface Props {
@@ -21,7 +22,7 @@ export const ReportsManager: React.FC<Props> = ({ students, subjects }) => {
   const auditLogs = getAuditLogs();
 
   const generateReportRows = () => {
-    return students.map(st => {
+    return sortStudentsByRollNumber(students).map(st => {
       const stAtts = attendanceRecords.filter(a => a.studentId === st.id);
       const summary = calculateOverallAttendance(stAtts, subjects);
 
@@ -93,12 +94,12 @@ export const ReportsManager: React.FC<Props> = ({ students, subjects }) => {
     window.print();
   };
 
-  const filteredStudents = students.filter(s => {
+  const filteredStudents = sortStudentsByRollNumber(students.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           s.rollNo.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept = filterDepartment === 'All' || s.department === filterDepartment;
     return matchesSearch && matchesDept;
-  });
+  }));
 
   return (
     <div className="space-y-4 max-w-5xl mx-auto animate-fade-in pb-12">
