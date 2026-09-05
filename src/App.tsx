@@ -124,27 +124,8 @@ export default function App() {
     setDefaultTabForRole(newRole);
   };
 
-  if (loadingSession) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center space-y-4 font-sans">
-        <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm font-bold tracking-wider text-amber-400">Loading Smart Attendance CMS...</p>
-      </div>
-    );
-  }
-
-  // Render Login Gateway if unauthenticated
-  if (!currentUser) {
-    return <LoginGateway onLoginSuccess={handleLoginSuccess} />;
-  }
-
-  const currentStudent = students.find(s => s.id === currentUser.studentId);
-  const currentFaculty = faculty.find(f => f.id === currentUser.facultyId) || faculty[0];
-  const pendingLeavesCount = leaves.filter(l => l.status === 'pending').length;
-  const pendingApprovalsCount = registrations.filter(r => r.status === 'pending').length;
-
   // Security Check: If non-admin user somehow gets mismatched activeRole, force back to currentUser.role
-  const effectiveRole = currentUser.role === 'admin' ? activeRole : currentUser.role;
+  const effectiveRole = currentUser?.role === 'admin' ? activeRole : (currentUser?.role || 'student');
 
   // Resolve linked students strictly for the logged-in parent
   const linkedStudents = useMemo(() => {
@@ -189,6 +170,25 @@ export default function App() {
       setSelectedChildId(students[0].id);
     }
   }, [effectiveRole, linkedStudents, selectedChildId, students]);
+
+  if (loadingSession) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center space-y-4 font-sans">
+        <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm font-bold tracking-wider text-amber-400">Loading Smart Attendance CMS...</p>
+      </div>
+    );
+  }
+
+  // Render Login Gateway if unauthenticated
+  if (!currentUser) {
+    return <LoginGateway onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  const currentStudent = students.find(s => s.id === currentUser.studentId);
+  const currentFaculty = faculty.find(f => f.id === currentUser.facultyId) || faculty[0];
+  const pendingLeavesCount = leaves.filter(l => l.status === 'pending').length;
+  const pendingApprovalsCount = registrations.filter(r => r.status === 'pending').length;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors selection:bg-amber-500 selection:text-slate-950">
