@@ -18,6 +18,25 @@
     color: #f8fafc;
     color-scheme: dark;
   }
+
+  /* Universal high-contrast input defaults across mobile & web */
+  input, select, textarea {
+    color: #0f172a;
+    caret-color: #f59e0b;
+  }
+
+  .dark input, .dark select, .dark textarea {
+    color: #f8fafc;
+    caret-color: #fbbf24;
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: #94a3b8;
+  }
+
+  .dark input::placeholder, .dark textarea::placeholder {
+    color: #64748b;
+  }
 }
 
 body {

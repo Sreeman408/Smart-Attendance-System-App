@@ -3,6 +3,7 @@ import { Role } from '../../types';
 import { sendEmailVerificationOTP, verifyOTPCodeAsync } from '../../services/authService';
 import { submitRegistrationRequestDB } from '../../services/dbService';
 import { UniversityLogo } from '../common/UniversityLogo';
+import { ThemeToggle } from '../common/ThemeToggle';
 import { hashPassword } from '../../utils/cryptoUtils';
 import { X, CheckCircle, Mail, AlertCircle, ShieldCheck, UserCheck, GraduationCap, Building2, User, Key, Phone, Lock } from 'lucide-react';
 
@@ -145,8 +146,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 dark:border-slate-800 transition-all my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 dark:bg-slate-950/80 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 dark:border-slate-800 transition-all my-8">
         
         {/* Modal Header */}
         <div className="bg-gradient-to-r from-red-950 via-red-900 to-amber-900 text-white p-5 flex items-center justify-between">
@@ -157,12 +158,19 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               <p className="text-xs text-amber-300 font-medium">Create your official CMS Profile & Credentials</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          
+          <div className="flex items-center gap-1.5">
+            <div className="p-1 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors">
+              <ThemeToggle />
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="p-6">
@@ -172,13 +180,13 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             <form onSubmit={handleFormSubmit} className="space-y-4">
               
               {/* Role Toggle Switch */}
-              <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+              <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
                 <button
                   type="button"
                   onClick={() => setRole('student')}
-                  className={`flex-1 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                     role === 'student'
-                      ? 'bg-amber-500 text-slate-950 shadow-md'
+                      ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
@@ -188,9 +196,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setRole('faculty')}
-                  className={`flex-1 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                     role === 'faculty'
-                      ? 'bg-amber-500 text-slate-950 shadow-md'
+                      ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
@@ -200,8 +208,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               </div>
 
               {errorMsg && (
-                <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-300 text-xs flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="p-3 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
                   <span>{errorMsg}</span>
                 </div>
               )}
@@ -212,14 +220,14 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                   Full Name *
                 </label>
                 <div className="relative">
-                  <User className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                  <User className="w-4 h-4 absolute left-3 top-3.5 text-slate-400" />
                   <input
                     type="text"
                     required
                     value={name}
                     onChange={e => setName(e.target.value)}
                     placeholder="e.g. Rahul Sharma"
-                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                   />
                 </div>
               </div>
@@ -230,14 +238,14 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                   Official Email Address *
                 </label>
                 <div className="relative">
-                  <Mail className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                  <Mail className="w-4 h-4 absolute left-3 top-3.5 text-slate-400" />
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="e.g. student@college.edu"
-                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                   />
                 </div>
               </div>
@@ -249,14 +257,14 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                     Password *
                   </label>
                   <div className="relative">
-                    <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <Lock className="w-4 h-4 absolute left-3 top-3.5 text-slate-400" />
                     <input
                       type="password"
                       required
                       value={password}
                       onChange={e => setPassword(e.target.value)}
                       placeholder="Min 6 chars"
-                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                     />
                   </div>
                 </div>
@@ -265,14 +273,14 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                     Confirm Password *
                   </label>
                   <div className="relative">
-                    <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <Lock className="w-4 h-4 absolute left-3 top-3.5 text-slate-400" />
                     <input
                       type="password"
                       required
                       value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
                       placeholder="Re-enter password"
-                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                     />
                   </div>
                 </div>
@@ -292,7 +300,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                         value={rollNo}
                         onChange={e => setRollNo(e.target.value)}
                         placeholder="24CS01"
-                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                       />
                     </div>
                     <div>
@@ -302,7 +310,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                       <select
                         value={department}
                         onChange={e => setDepartment(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                       >
                         <option value="Computer Science">Computer Science</option>
                         <option value="Information Tech">Information Tech</option>
@@ -321,7 +329,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                       <select
                         value={year}
                         onChange={e => setYear(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-medium"
+                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                       >
                         <option value="1st Year">1st Year</option>
                         <option value="2nd Year">2nd Year</option>
@@ -336,7 +344,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                       <select
                         value={semester}
                         onChange={e => setSemester(Number(e.target.value))}
-                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-medium"
+                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                       >
                         {[1,2,3,4,5,6,7,8].map(s => (
                           <option key={s} value={s}>Sem {s}</option>
@@ -352,14 +360,14 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                         value={section}
                         onChange={e => setSection(e.target.value)}
                         placeholder="A"
-                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none uppercase"
+                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none uppercase shadow-xs"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 pt-1">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                         Parent / Guardian Name
                       </label>
                       <input
@@ -367,11 +375,11 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                         value={parentName}
                         onChange={e => setParentName(e.target.value)}
                         placeholder="e.g. Vikram Sharma"
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
+                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                         Parent Contact Phone
                       </label>
                       <input
@@ -379,7 +387,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                         value={parentPhone}
                         onChange={e => setParentPhone(e.target.value)}
                         placeholder="+91 98765 43210"
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
+                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                       />
                     </div>
                   </div>
@@ -400,7 +408,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                         value={facultyCode}
                         onChange={e => setFacultyCode(e.target.value)}
                         placeholder="CS-FAC-03"
-                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                       />
                     </div>
                     <div>
@@ -410,7 +418,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                       <select
                         value={department}
                         onChange={e => setDepartment(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                       >
                         <option value="Computer Science">Computer Science</option>
                         <option value="Information Tech">Information Tech</option>
@@ -431,7 +439,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                         value={designation}
                         onChange={e => setDesignation(e.target.value)}
                         placeholder="Assistant Professor"
-                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                       />
                     </div>
                     <div>
@@ -443,7 +451,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                         value={phone}
                         onChange={e => setPhone(e.target.value)}
                         placeholder="+91 98401 98765"
-                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                       />
                     </div>
                   </div>
@@ -453,7 +461,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-4 py-3 bg-gradient-to-r from-red-900 to-amber-600 text-white font-bold rounded-xl shadow-lg hover:brightness-110 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                className="w-full mt-4 py-3 bg-gradient-to-r from-red-900 to-amber-600 hover:brightness-110 text-white font-bold rounded-xl shadow-lg shadow-red-900/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <ShieldCheck className="w-4 h-4" />
                 {loading ? 'Sending Verification Code...' : 'Proceed to Real Email Verification'}
@@ -465,30 +473,31 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           {step === 'otp' && (
             <form onSubmit={handleVerifyAndSubmit} className="space-y-4">
               <div className="text-center py-2">
-                <div className="w-12 h-12 bg-amber-100 dark:bg-amber-950/50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                <div className="w-12 h-12 bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 rounded-full flex items-center justify-center mx-auto mb-3">
                   <Mail className="w-6 h-6" />
                 </div>
                 <h4 className="font-bold text-base text-slate-900 dark:text-white">Verify Email Address</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Enter the verification code sent to <strong className="text-slate-800 dark:text-slate-200">{email}</strong>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                  Enter the verification code sent to <strong className="text-slate-900 dark:text-slate-100 font-bold">{email}</strong>
                 </p>
               </div>
 
               {/* Real OTP Banner info */}
               {otpInfoMsg && (
-                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-300 text-xs text-center font-mono">
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-900 dark:text-amber-300 text-xs text-center font-mono">
                   {otpInfoMsg}
                 </div>
               )}
 
               {errorMsg && (
-                <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 text-red-600 text-xs rounded-xl">
-                  {errorMsg}
+                <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-xs rounded-xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
+                  <span>{errorMsg}</span>
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1 text-center">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5 text-center">
                   Verification Code (OTP)
                 </label>
                 <input
@@ -498,7 +507,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                   value={userOTPInput}
                   onChange={e => setUserOTPInput(e.target.value)}
                   placeholder="123456"
-                  className="w-full text-center tracking-widest font-mono text-xl py-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  className="w-full text-center tracking-widest font-mono text-2xl font-bold py-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-amber-500 dark:caret-amber-400 focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
                 />
               </div>
 
@@ -506,14 +515,14 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setStep('form')}
-                  className="w-1/3 py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-sm"
+                  className="w-1/3 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold rounded-xl text-sm transition-colors cursor-pointer"
                 >
                   Back
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-2/3 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-md text-sm flex items-center justify-center gap-2"
+                  className="w-2/3 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-md text-sm flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99]"
                 >
                   {loading ? 'Submitting...' : 'Submit for Admin Approval'}
                 </button>
@@ -524,16 +533,17 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           {/* STEP 3: Pending Confirmation View */}
           {step === 'pending' && (
             <div className="text-center py-6 space-y-4">
-              <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+              <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto">
                 <CheckCircle className="w-10 h-10" />
               </div>
               <h4 className="font-bold text-xl text-slate-900 dark:text-white">Registration Application Submitted!</h4>
-              <p className="text-sm text-slate-600 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
+              <p className="text-sm text-slate-600 dark:text-slate-300 max-w-sm mx-auto leading-relaxed">
                 Your profile & credentials have been sent to the Admin Registry. Once approved by the administrator, you will be able to log in with your chosen password.
               </p>
               <button
+                type="button"
                 onClick={handleFinish}
-                className="w-full py-3 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-950 font-bold rounded-xl shadow-lg"
+                className="w-full py-3 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-950 font-bold rounded-xl shadow-lg transition-all cursor-pointer"
               >
                 Return to Login Screen
               </button>
