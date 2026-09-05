@@ -5,7 +5,7 @@ import {
 } from './dbService';
 import { Preferences } from '@capacitor/preferences';
 
-const SESSION_KEY = 'au_cms_active_session';
+const SESSION_KEY = 'au_cms_active_session_v10';
 const OTP_STORAGE_KEY = 'au_cms_email_otps';
 
 export interface AuthResult {
@@ -26,12 +26,12 @@ export async function loginUser(emailOrId: string, role: Role): Promise<AuthResu
     if (input === 'admin@college.edu' || input === 'admin' || input.includes('admin')) {
       const adminUser: User = {
         id: 'usr_admin1',
-        name: 'Dr. Arthur Vance',
+        name: 'Dr. M. Balasubramanian',
         email: 'admin@college.edu',
         role: 'admin',
-        department: 'Administration',
+        department: 'Department of Computer Science & Engineering',
         avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-        phone: '+91 98401 23456',
+        phone: '+91 94431 12345',
         approvalStatus: 'approved'
       };
       await saveActiveSession(adminUser);
@@ -136,13 +136,16 @@ export async function loginUser(emailOrId: string, role: Role): Promise<AuthResu
     const childMatches = students.filter(s =>
       s.email.toLowerCase().includes(input) || (s.parentPhone && s.parentPhone.includes(input)) || input.includes('parent') || input === 'parent@gmail.com'
     );
+    if (childMatches.length === 0) {
+      return { success: false, message: 'No registered student profile linked with this parent phone / email.' };
+    }
     const parentUser: User = {
       id: 'usr_parent_main',
       name: 'Ward Parent Gateway',
       email: input.includes('@') ? input : 'parent@gmail.com',
       role: 'parent',
       parentId: 'PAR301',
-      childStudentIds: childMatches.length > 0 ? childMatches.map(c => c.id) : [students[0]?.id || 'STU202401'],
+      childStudentIds: childMatches.map(c => c.id),
       approvalStatus: 'approved'
     };
     await saveActiveSession(parentUser);
@@ -186,7 +189,12 @@ export function verifyOTPCode(email: string, codeInput: string): boolean {
 // SESSION PERSISTENCE MANAGEMENT
 // -------------------------------------------------------------
 export async function saveActiveSession(user: User): Promise<void> {
-  await Preferences.set({ key: SESSION_KEY, value: JSON.stringify(user) });
+  try {
+    await Preferences.set({ key: SESSION_KEY, value: JSON.stringify(user) });
+    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+  } catch (e) {
+    console.error('Error saving active session:', e);
+  }
 }
 
 export async function getStoredActiveSession(): Promise<User | null> {
@@ -195,6 +203,10 @@ export async function getStoredActiveSession(): Promise<User | null> {
     if (res && res.value) {
       return JSON.parse(res.value) as User;
     }
+    const local = localStorage.getItem(SESSION_KEY);
+    if (local) {
+      return JSON.parse(local) as User;
+    }
   } catch (e) {
     console.warn('Session retrieval error:', e);
   }
@@ -202,5 +214,12 @@ export async function getStoredActiveSession(): Promise<User | null> {
 }
 
 export async function clearActiveSession(): Promise<void> {
-  await Preferences.remove({ key: SESSION_KEY });
+  try {
+    await Preferences.remove({ key: SESSION_KEY });
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch (e) {
+    console.error('Error clearing active session:', e);
+  }
 }

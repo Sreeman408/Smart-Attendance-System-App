@@ -107,8 +107,8 @@ export default function App() {
     return <LoginGateway onLoginSuccess={handleLoginSuccess} />;
   }
 
-  const currentStudent = students.find(s => s.id === (currentUser.studentId || 'STU202401')) || students[0];
-  const currentFaculty = faculty.find(f => f.id === (currentUser.facultyId || 'FAC101')) || faculty[0];
+  const currentStudent = students.find(s => s.id === currentUser.studentId);
+  const currentFaculty = faculty.find(f => f.id === currentUser.facultyId) || faculty[0];
   const pendingLeavesCount = leaves.filter(l => l.status === 'pending').length;
   const pendingApprovalsCount = registrations.filter(r => r.status === 'pending').length;
 
@@ -145,15 +145,24 @@ export default function App() {
         {/* Primary Content View */}
         <main className="flex-1 p-3 sm:p-6 overflow-y-auto">
           
-          {effectiveRole === 'student' && currentStudent && (
-            <StudentDashboard
-              student={currentStudent}
-              subjects={subjects}
-              attendanceRecords={attendanceRecords}
-              timetable={timetable}
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-            />
+          {effectiveRole === 'student' && (
+            currentStudent ? (
+              <StudentDashboard
+                student={currentStudent}
+                subjects={subjects}
+                attendanceRecords={attendanceRecords}
+                timetable={timetable}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+              />
+            ) : (
+              <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                <h3 className="font-bold text-lg text-slate-900 dark:text-white">Profile Pending Approval</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Your student registration is being reviewed by the Admin. Once approved, your profile and attendance will display here.
+                </p>
+              </div>
+            )
           )}
 
           {effectiveRole === 'faculty' && currentFaculty && (

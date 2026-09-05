@@ -13,17 +13,17 @@ import { Preferences } from '@capacitor/preferences';
 
 // Cache keys for Capacitor Preferences
 const PREF_KEYS = {
-  STUDENTS: 'au_cms_v7_students',
-  FACULTY: 'au_cms_v7_faculty',
-  SUBJECTS: 'au_cms_v7_subjects',
-  TIMETABLE: 'au_cms_v7_timetable',
-  ATTENDANCE: 'au_cms_v7_attendance',
-  LEAVES: 'au_cms_v7_leaves',
-  LOGS: 'au_cms_v7_logs',
-  SATURDAY_CONFIG: 'au_cms_v7_saturday_config',
-  REGISTRATIONS: 'au_cms_v7_registrations',
-  PARENTS: 'au_cms_v7_parents',
-  DEPARTMENTS: 'au_cms_v7_departments'
+  STUDENTS: 'au_cms_clean_v10_students',
+  FACULTY: 'au_cms_clean_v10_faculty',
+  SUBJECTS: 'au_cms_clean_v10_subjects',
+  TIMETABLE: 'au_cms_clean_v10_timetable',
+  ATTENDANCE: 'au_cms_clean_v10_attendance',
+  LEAVES: 'au_cms_clean_v10_leaves',
+  LOGS: 'au_cms_clean_v10_logs',
+  SATURDAY_CONFIG: 'au_cms_clean_v10_saturday_config',
+  REGISTRATIONS: 'au_cms_clean_v10_registrations',
+  PARENTS: 'au_cms_clean_v10_parents',
+  DEPARTMENTS: 'au_cms_clean_v10_departments'
 };
 
 // Helper for native Preferences caching

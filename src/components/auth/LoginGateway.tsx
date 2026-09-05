@@ -29,11 +29,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ onLoginSuccess }) =>
     setSelectedRole(role);
     setErrorMsg('');
     setPendingWarning('');
-    // Pre-fill helpful demo hint
-    if (role === 'student') setLoginInput('STU202401');
-    else if (role === 'faculty') setLoginInput('FAC101');
-    else if (role === 'admin') setLoginInput('admin@college.edu');
-    else if (role === 'parent') setLoginInput('parent@gmail.com');
+    setLoginInput('');
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
