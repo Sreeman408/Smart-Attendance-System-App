@@ -26,6 +26,7 @@ export interface Student {
   rollNo: string;
   name: string;
   email: string;
+  phone?: string;
   department: string;
   year: string; // "1st Year", "2nd Year", "3rd Year", "4th Year"
   semester: number;
@@ -191,7 +192,9 @@ export interface ParentRecord {
   email: string;
   phone: string;
   childRollNo: string;
+  childRollNos?: string[];
   childName?: string;
+  address?: string;
   passwordHash?: string;
   createdAt?: string;
 }

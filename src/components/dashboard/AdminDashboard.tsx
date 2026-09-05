@@ -22,6 +22,7 @@ import {
 } from '../../services/dbService';
 import { calculateOverallAttendance } from '../../utils/attendance';
 import { sortStudentsByRollNumber } from '../../utils/sortingUtils';
+import { hashPassword } from '../../utils/cryptoUtils';
 import * as XLSX from 'xlsx';
 
 interface Props {
@@ -173,89 +174,144 @@ export const AdminDashboard: React.FC<Props> = ({
   // CRUD Handlers
   const handleSaveEntity = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (crudTab === 'subjects') {
-      const sub: Subject = {
-        id: editingItem?.id || `SUB_${Date.now()}`,
-        code: formData.code || 'CS501',
-        name: formData.name || 'New Subject',
-        department: formData.department || 'Computer Science',
-        semester: Number(formData.semester || 4),
-        type: formData.type || 'Lecture',
-        credits: Number(formData.credits || 3),
-        facultyId: formData.facultyId || faculty[0]?.id || 'FAC101',
-        facultyName: faculty.find(f => f.id === formData.facultyId)?.name || 'Prof. Robert Langdon'
-      };
-      await saveSubjectToDB(sub);
-    } else if (crudTab === 'faculty') {
-      const fac: Faculty = {
-        id: editingItem?.id || `FAC_${Date.now()}`,
-        facultyCode: formData.facultyCode || `FAC-${Math.floor(100 + Math.random() * 900)}`,
-        name: formData.name || 'New Faculty',
-        email: formData.email || 'faculty@college.edu',
-        department: formData.department || 'Computer Science',
-        designation: formData.designation || 'Assistant Professor',
-        phone: formData.phone || '+1 555-0192',
-        subjectsHandled: [],
-        approvalStatus: 'approved'
-      };
-      await saveFacultyToDB(fac);
-    } else if (crudTab === 'students') {
-      const stu: Student = {
-        id: editingItem?.id || `STU_${Date.now()}`,
-        rollNo: formData.rollNo || '24CS05',
-        name: formData.name || 'New Student',
-        email: formData.email || 'student@student.edu',
-        department: formData.department || 'Computer Science',
-        year: formData.year || '2nd Year',
-        semester: Number(formData.semester || 4),
-        section: formData.section || 'A',
-        parentName: formData.parentName,
-        parentPhone: formData.parentPhone,
-        approvalStatus: 'approved'
-      };
-      await saveStudentToDB(stu);
-    } else if (crudTab === 'parents') {
-      const par: ParentRecord = {
-        id: editingItem?.id || `PAR_${Date.now()}`,
-        name: formData.name || 'New Parent',
-        email: formData.email || 'parent@gmail.com',
-        phone: formData.phone || '+1 555-0199',
-        childRollNo: formData.childRollNo || '24CS01',
-        childName: formData.childName || 'Rahul Sharma'
-      };
-      await saveParentToDB(par);
-    } else if (crudTab === 'timetable') {
-      const tt: TimetableSlot = {
-        id: editingItem?.id || `SLOT_${Date.now()}`,
-        dayOfWeek: formData.dayOfWeek || 'Monday',
-        timeSlot: formData.timeSlot || '09:00 AM - 10:00 AM',
-        subjectId: formData.subjectId || subjects[0]?.id || 'SUB101',
-        subjectName: subjects.find(s => s.id === formData.subjectId)?.name || 'Data Structures',
-        subjectCode: subjects.find(s => s.id === formData.subjectId)?.code || 'CS401',
-        subjectType: subjects.find(s => s.id === formData.subjectId)?.type || 'Lecture',
-        facultyId: formData.facultyId || faculty[0]?.id || 'FAC101',
-        facultyName: faculty.find(f => f.id === formData.facultyId)?.name || 'Prof. Robert Langdon',
-        roomNo: formData.roomNo || 'LH-201',
-        department: formData.department || 'Computer Science',
-        semester: Number(formData.semester || 4),
-        section: formData.section || 'A'
-      };
-      await saveTimetableSlotToDB(tt);
-    } else if (crudTab === 'departments') {
-      const dept: Department = {
-        id: editingItem?.id || `DEP_${Date.now()}`,
-        code: formData.code || 'IT',
-        name: formData.name || 'Information Technology',
-        hodName: formData.hodName || 'Dr. Arthur Vance'
-      };
-      await saveDepartmentToDB(dept);
-    }
+    try {
+      if (crudTab === 'subjects') {
+        const sub: Subject = {
+          id: editingItem?.id || `SUB_${Date.now()}`,
+          code: (formData.code || 'CS501').trim(),
+          name: (formData.name || 'New Subject').trim(),
+          department: formData.department || 'Computer Science',
+          semester: Number(formData.semester || 4),
+          type: formData.type || 'Lecture',
+          credits: Number(formData.credits || 3),
+          facultyId: formData.facultyId || faculty[0]?.id || 'FAC101',
+          facultyName: faculty.find(f => f.id === formData.facultyId)?.name || 'Prof. Robert Langdon'
+        };
+        await saveSubjectToDB(sub);
+        setActionFeedback({ type: 'success', message: `Subject "${sub.name}" saved successfully!` });
+      } else if (crudTab === 'faculty') {
+        let passwordHash = editingItem?.passwordHash;
+        if (formData.password && formData.password.trim()) {
+          passwordHash = await hashPassword(formData.password.trim());
+        } else if (!passwordHash) {
+          passwordHash = await hashPassword('staff123');
+        }
 
-    setModalMode(null);
-    setEditingItem(null);
-    setFormData({});
-    await loadExtraAdminData();
-    onDataChanged();
+        let subjectsHandled: string[] = [];
+        if (Array.isArray(formData.subjectsHandled)) {
+          subjectsHandled = formData.subjectsHandled;
+        } else if (typeof formData.subjectsHandled === 'string' && formData.subjectsHandled.trim()) {
+          subjectsHandled = formData.subjectsHandled.split(',').map((s: string) => s.trim()).filter(Boolean);
+        }
+
+        const fac: Faculty = {
+          id: editingItem?.id || `FAC_${Date.now()}`,
+          facultyCode: (formData.facultyCode || `FAC-${Math.floor(100 + Math.random() * 900)}`).trim(),
+          name: (formData.name || 'New Faculty').trim(),
+          email: (formData.email || 'faculty@college.edu').trim(),
+          department: formData.department || 'Computer Science',
+          designation: formData.designation || 'Assistant Professor',
+          phone: (formData.phone || '').trim(),
+          subjectsHandled,
+          passwordHash,
+          approvalStatus: (formData.approvalStatus as 'approved' | 'pending') || 'approved'
+        };
+        await saveFacultyToDB(fac);
+        setActionFeedback({ type: 'success', message: `Faculty "${fac.name}" (${fac.facultyCode}) saved successfully!` });
+      } else if (crudTab === 'students') {
+        let passwordHash = editingItem?.passwordHash;
+        if (formData.password && formData.password.trim()) {
+          passwordHash = await hashPassword(formData.password.trim());
+        } else if (!passwordHash) {
+          passwordHash = await hashPassword('student123');
+        }
+
+        const stu: Student = {
+          id: editingItem?.id || `STU_${Date.now()}`,
+          rollNo: (formData.rollNo || '').trim(),
+          name: (formData.name || '').trim(),
+          email: (formData.email || '').trim(),
+          phone: (formData.phone || '').trim(),
+          department: formData.department || 'Computer Science',
+          year: formData.year || '1st Year',
+          semester: Number(formData.semester || 1),
+          section: formData.section || 'A',
+          passwordHash,
+          parentName: formData.parentName?.trim() || undefined,
+          parentPhone: formData.parentPhone?.trim() || undefined,
+          approvalStatus: (formData.approvalStatus as 'approved' | 'pending') || 'approved'
+        };
+        await saveStudentToDB(stu);
+        setActionFeedback({ type: 'success', message: `Student "${stu.name}" (${stu.rollNo}) saved successfully!` });
+      } else if (crudTab === 'parents') {
+        let passwordHash = editingItem?.passwordHash;
+        if (formData.password && formData.password.trim()) {
+          passwordHash = await hashPassword(formData.password.trim());
+        } else if (!passwordHash) {
+          passwordHash = await hashPassword('parent123');
+        }
+
+        let childRollNos: string[] = [];
+        if (Array.isArray(formData.childRollNos)) {
+          childRollNos = formData.childRollNos;
+        } else if (typeof formData.childRollNos === 'string' && formData.childRollNos.trim()) {
+          childRollNos = formData.childRollNos.split(',').map((s: string) => s.trim()).filter(Boolean);
+        } else if (formData.childRollNo) {
+          childRollNos = [formData.childRollNo.trim()];
+        }
+        const primaryRoll = childRollNos[0] || formData.childRollNo?.trim() || '';
+
+        const par: ParentRecord = {
+          id: editingItem?.id || `PAR_${Date.now()}`,
+          name: (formData.name || 'New Parent').trim(),
+          email: (formData.email || 'parent@gmail.com').trim(),
+          phone: (formData.phone || '').trim(),
+          childRollNo: primaryRoll,
+          childRollNos,
+          childName: (formData.childName || '').trim(),
+          address: (formData.address || '').trim(),
+          passwordHash
+        };
+        await saveParentToDB(par);
+        setActionFeedback({ type: 'success', message: `Parent "${par.name}" saved successfully!` });
+      } else if (crudTab === 'timetable') {
+        const tt: TimetableSlot = {
+          id: editingItem?.id || `SLOT_${Date.now()}`,
+          dayOfWeek: formData.dayOfWeek || 'Monday',
+          timeSlot: formData.timeSlot || '09:00 AM - 10:00 AM',
+          subjectId: formData.subjectId || subjects[0]?.id || 'SUB101',
+          subjectName: subjects.find(s => s.id === formData.subjectId)?.name || 'Data Structures',
+          subjectCode: subjects.find(s => s.id === formData.subjectId)?.code || 'CS401',
+          subjectType: subjects.find(s => s.id === formData.subjectId)?.type || 'Lecture',
+          facultyId: formData.facultyId || faculty[0]?.id || 'FAC101',
+          facultyName: faculty.find(f => f.id === formData.facultyId)?.name || 'Prof. Robert Langdon',
+          roomNo: formData.roomNo || 'LH-201',
+          department: formData.department || 'Computer Science',
+          semester: Number(formData.semester || 4),
+          section: formData.section || 'A'
+        };
+        await saveTimetableSlotToDB(tt);
+        setActionFeedback({ type: 'success', message: `Timetable slot saved successfully!` });
+      } else if (crudTab === 'departments') {
+        const dept: Department = {
+          id: editingItem?.id || `DEP_${Date.now()}`,
+          code: formData.code || 'IT',
+          name: formData.name || 'Information Technology',
+          hodName: formData.hodName || 'Dr. Arthur Vance'
+        };
+        await saveDepartmentToDB(dept);
+        setActionFeedback({ type: 'success', message: `Department "${dept.name}" saved successfully!` });
+      }
+
+      setModalMode(null);
+      setEditingItem(null);
+      setFormData({});
+      await loadExtraAdminData();
+      onDataChanged();
+    } catch (err: any) {
+      console.error('Error saving entity:', err);
+      setActionFeedback({ type: 'error', message: `Save failed: ${err.message || 'Database error'}` });
+    }
   };
 
   const promptDelete = (
@@ -297,13 +353,87 @@ export const AdminDashboard: React.FC<Props> = ({
 
   const openAddModal = () => {
     setEditingItem(null);
-    setFormData({});
+    if (crudTab === 'students') {
+      setFormData({
+        rollNo: '',
+        name: '',
+        email: '',
+        phone: '',
+        department: 'Computer Science',
+        year: '1st Year',
+        semester: 1,
+        section: 'A',
+        password: '',
+        parentName: '',
+        parentPhone: '',
+        approvalStatus: 'approved'
+      });
+    } else if (crudTab === 'faculty') {
+      setFormData({
+        facultyCode: '',
+        name: '',
+        email: '',
+        phone: '',
+        department: 'Computer Science',
+        designation: 'Assistant Professor',
+        password: '',
+        approvalStatus: 'approved',
+        subjectsHandled: ''
+      });
+    } else if (crudTab === 'parents') {
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        password: '',
+        childRollNos: '',
+        address: ''
+      });
+    } else {
+      setFormData({});
+    }
     setModalMode('add');
   };
 
   const openEditModal = (item: any) => {
     setEditingItem(item);
-    setFormData({ ...item });
+    if (crudTab === 'students') {
+      setFormData({
+        ...item,
+        password: '', // Blank password by default so user only enters if resetting
+        phone: item.phone || '',
+        year: item.year || '1st Year',
+        semester: item.semester || 1,
+        section: item.section || 'A',
+        parentName: item.parentName || '',
+        parentPhone: item.parentPhone || '',
+        approvalStatus: item.approvalStatus || 'approved'
+      });
+    } else if (crudTab === 'faculty') {
+      setFormData({
+        ...item,
+        password: '',
+        phone: item.phone || '',
+        department: item.department || 'Computer Science',
+        designation: item.designation || 'Assistant Professor',
+        approvalStatus: item.approvalStatus || 'approved',
+        subjectsHandled: Array.isArray(item.subjectsHandled) ? item.subjectsHandled.join(', ') : (item.subjectsHandled || '')
+      });
+    } else if (crudTab === 'parents') {
+      const rollString = Array.isArray(item.childRollNos) && item.childRollNos.length > 0
+        ? item.childRollNos.join(', ')
+        : (item.childRollNo || '');
+      setFormData({
+        ...item,
+        password: '',
+        phone: item.phone || '',
+        address: item.address || '',
+        childRollNos: rollString,
+        childRollNo: item.childRollNo || ''
+      });
+    } else {
+      setFormData({ ...item });
+    }
     setModalMode('edit');
   };
 
@@ -559,8 +689,10 @@ export const AdminDashboard: React.FC<Props> = ({
                     <tr>
                       <th className="p-3">Roll No</th>
                       <th className="p-3">Name</th>
+                      <th className="p-3">Email</th>
                       <th className="p-3">Department</th>
                       <th className="p-3">Year / Sem</th>
+                      <th className="p-3">Section</th>
                       <th className="p-3">Attendance %</th>
                       <th className="p-3">Status</th>
                       <th className="p-3 text-right">Actions</th>
@@ -577,8 +709,10 @@ export const AdminDashboard: React.FC<Props> = ({
                         <tr key={st.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                           <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{st.rollNo}</td>
                           <td className="p-3 font-bold text-slate-900 dark:text-white">{st.name}</td>
+                          <td className="p-3 text-slate-500 font-mono text-[11px]">{st.email}</td>
                           <td className="p-3 text-slate-500">{st.department}</td>
-                          <td className="p-3 font-semibold">{st.year || '2nd Year'} (Sem {st.semester})</td>
+                          <td className="p-3 font-semibold">{st.year || '1st Year'} (Sem {st.semester || 1})</td>
+                          <td className="p-3 font-bold text-center text-slate-700 dark:text-slate-300">{st.section || 'A'}</td>
                           <td className="p-3 font-extrabold">{summary.percentage}%</td>
                           <td className="p-3">
                             <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full ${
@@ -626,9 +760,11 @@ export const AdminDashboard: React.FC<Props> = ({
                     <tr>
                       <th className="p-3">Faculty Code</th>
                       <th className="p-3">Name</th>
+                      <th className="p-3">Email</th>
                       <th className="p-3">Department</th>
                       <th className="p-3">Designation</th>
-                      <th className="p-3">Phone / Email</th>
+                      <th className="p-3">Phone</th>
+                      <th className="p-3">Status</th>
                       <th className="p-3 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -639,9 +775,19 @@ export const AdminDashboard: React.FC<Props> = ({
                         <tr key={f.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                           <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{f.facultyCode}</td>
                           <td className="p-3 font-bold text-slate-900 dark:text-white">{f.name}</td>
+                          <td className="p-3 text-slate-500 font-mono text-[11px]">{f.email}</td>
                           <td className="p-3 text-slate-500">{f.department}</td>
                           <td className="p-3 font-semibold">{f.designation}</td>
-                          <td className="p-3 text-slate-500 font-mono">{f.phone || f.email}</td>
+                          <td className="p-3 text-slate-500 font-mono text-[11px]">{f.phone || '—'}</td>
+                          <td className="p-3">
+                            <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+                              f.approvalStatus === 'approved'
+                                ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800'
+                                : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
+                            }`}>
+                              {f.approvalStatus || 'approved'}
+                            </span>
+                          </td>
                           <td className="p-3 text-right space-x-1 whitespace-nowrap">
                             <button
                               onClick={() => {
@@ -675,44 +821,61 @@ export const AdminDashboard: React.FC<Props> = ({
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase font-bold border-b border-slate-200 dark:border-slate-800">
                     <tr>
-                      <th className="p-3">Child Roll No</th>
                       <th className="p-3">Parent Name</th>
                       <th className="p-3">Email</th>
-                      <th className="p-3">Phone Number</th>
+                      <th className="p-3">Phone</th>
+                      <th className="p-3">Linked Student(s)</th>
                       <th className="p-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {parents
                       .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.childRollNo.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .map(p => (
-                        <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                          <td className="p-3 font-mono font-bold text-amber-600 dark:text-amber-400">{p.childRollNo}</td>
-                          <td className="p-3 font-bold text-slate-900 dark:text-white">{p.name}</td>
-                          <td className="p-3 text-slate-500">{p.email}</td>
-                          <td className="p-3 font-mono font-semibold">{p.phone}</td>
-                          <td className="p-3 text-right space-x-1 whitespace-nowrap">
-                            <button
-                              onClick={() => {
-                                setCrudTab('parents');
-                                openEditModal(p);
-                                setSubSection('crud');
-                              }}
-                              className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg transition-all"
-                              title="Edit Parent"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => promptDelete('parent', p.id, p.name, `Child Roll: ${p.childRollNo} • ${p.phone}`)}
-                              className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-all"
-                              title="Delete Parent"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      .map(p => {
+                        const linked = (p.childRollNos && p.childRollNos.length > 0)
+                          ? p.childRollNos
+                          : (p.childRollNo ? [p.childRollNo] : []);
+                        return (
+                          <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                            <td className="p-3 font-bold text-slate-900 dark:text-white">{p.name}</td>
+                            <td className="p-3 text-slate-500 font-mono text-[11px]">{p.email || '—'}</td>
+                            <td className="p-3 font-mono font-semibold">{p.phone}</td>
+                            <td className="p-3">
+                              <div className="flex flex-wrap gap-1">
+                                {linked.length > 0 ? (
+                                  linked.map((r, i) => (
+                                    <span key={i} className="px-2 py-0.5 text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 rounded-md border border-amber-200 dark:border-amber-800">
+                                      {r}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-slate-400 italic">None</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-3 text-right space-x-1 whitespace-nowrap">
+                              <button
+                                onClick={() => {
+                                  setCrudTab('parents');
+                                  openEditModal(p);
+                                  setSubSection('crud');
+                                }}
+                                className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg transition-all"
+                                title="Edit Parent"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => promptDelete('parent', p.id, p.name, `Child Roll: ${linked.join(', ')} • ${p.phone}`)}
+                                className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-all"
+                                title="Delete Parent"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -841,89 +1004,342 @@ export const AdminDashboard: React.FC<Props> = ({
                 )}
 
                 {crudTab === 'faculty' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <input
-                      type="text"
-                      required
-                      placeholder="Faculty Code (e.g. FAC103)"
-                      value={formData.facultyCode || ''}
-                      onChange={e => setFormData({ ...formData, facultyCode: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Full Name"
-                      value={formData.name || ''}
-                      onChange={e => setFormData({ ...formData, name: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    />
-                    <input
-                      type="email"
-                      required
-                      placeholder="Email Address"
-                      value={formData.email || ''}
-                      onChange={e => setFormData({ ...formData, email: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Faculty Code / Staff Code *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. FAC101"
+                        value={formData.facultyCode || ''}
+                        onChange={e => setFormData({ ...formData, facultyCode: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Full Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Dr. / Prof. Full Name"
+                        value={formData.name || ''}
+                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Email Address *</label>
+                      <input
+                        type="email"
+                        required
+                        placeholder="faculty@college.edu"
+                        value={formData.email || ''}
+                        onChange={e => setFormData({ ...formData, email: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Phone Number</label>
+                      <input
+                        type="tel"
+                        placeholder="e.g. +91 9876543212"
+                        value={formData.phone || ''}
+                        onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Department *</label>
+                      <select
+                        value={formData.department || 'Computer Science'}
+                        onChange={e => setFormData({ ...formData, department: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="Computer Science">Computer Science</option>
+                        <option value="Information Technology">Information Technology</option>
+                        <option value="Electronics & Communication">Electronics & Communication</option>
+                        <option value="Electrical & Electronics">Electrical & Electronics</option>
+                        <option value="Mechanical">Mechanical</option>
+                        <option value="Civil">Civil</option>
+                        {departments.map(d => (
+                          !['Computer Science', 'Information Technology', 'Electronics & Communication', 'Electrical & Electronics', 'Mechanical', 'Civil'].includes(d.name) && (
+                            <option key={d.id} value={d.name}>{d.name}</option>
+                          )
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Designation *</label>
+                      <select
+                        value={formData.designation || 'Assistant Professor'}
+                        onChange={e => setFormData({ ...formData, designation: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="Assistant Professor">Assistant Professor</option>
+                        <option value="Associate Professor">Associate Professor</option>
+                        <option value="Professor">Professor</option>
+                        <option value="Head of Department (HOD)">Head of Department (HOD)</option>
+                        <option value="Lecturer">Lecturer</option>
+                        <option value="Visiting Faculty">Visiting Faculty</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                        {modalMode === 'edit' ? 'Password (leave blank to keep)' : 'Password *'}
+                      </label>
+                      <input
+                        type="password"
+                        required={modalMode === 'add'}
+                        placeholder={modalMode === 'edit' ? 'Leave blank to retain current' : 'Create password'}
+                        value={formData.password || ''}
+                        onChange={e => setFormData({ ...formData, password: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Approval Status *</label>
+                      <select
+                        value={formData.approvalStatus || 'approved'}
+                        onChange={e => setFormData({ ...formData, approvalStatus: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="approved">Approved</option>
+                        <option value="pending">Pending Review</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1 sm:col-span-2 md:col-span-3 lg:col-span-4">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Subjects Handled (comma-separated codes)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. CS501, CS502, CS503"
+                        value={formData.subjectsHandled || ''}
+                        onChange={e => setFormData({ ...formData, subjectsHandled: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
                   </div>
                 )}
 
                 {crudTab === 'students' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <input
-                      type="text"
-                      required
-                      placeholder="Roll No (e.g. 24CS05)"
-                      value={formData.rollNo || ''}
-                      onChange={e => setFormData({ ...formData, rollNo: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Student Name"
-                      value={formData.name || ''}
-                      onChange={e => setFormData({ ...formData, name: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    />
-                    <input
-                      type="email"
-                      required
-                      placeholder="Email Address"
-                      value={formData.email || ''}
-                      onChange={e => setFormData({ ...formData, email: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Roll Number *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 22CSPC501"
+                        value={formData.rollNo || ''}
+                        onChange={e => setFormData({ ...formData, rollNo: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Student Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Full Name"
+                        value={formData.name || ''}
+                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Email Address *</label>
+                      <input
+                        type="email"
+                        required
+                        placeholder="student@college.edu"
+                        value={formData.email || ''}
+                        onChange={e => setFormData({ ...formData, email: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Phone Number</label>
+                      <input
+                        type="tel"
+                        placeholder="e.g. +91 9876543210"
+                        value={formData.phone || ''}
+                        onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Department *</label>
+                      <select
+                        value={formData.department || 'Computer Science'}
+                        onChange={e => setFormData({ ...formData, department: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="Computer Science">Computer Science</option>
+                        <option value="Information Technology">Information Technology</option>
+                        <option value="Electronics & Communication">Electronics & Communication</option>
+                        <option value="Electrical & Electronics">Electrical & Electronics</option>
+                        <option value="Mechanical">Mechanical</option>
+                        <option value="Civil">Civil</option>
+                        {departments.map(d => (
+                          !['Computer Science', 'Information Technology', 'Electronics & Communication', 'Electrical & Electronics', 'Mechanical', 'Civil'].includes(d.name) && (
+                            <option key={d.id} value={d.name}>{d.name}</option>
+                          )
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Year *</label>
+                      <select
+                        value={formData.year || '1st Year'}
+                        onChange={e => setFormData({ ...formData, year: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="1st Year">1st Year</option>
+                        <option value="2nd Year">2nd Year</option>
+                        <option value="3rd Year">3rd Year</option>
+                        <option value="4th Year">4th Year</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Semester (1-8) *</label>
+                      <select
+                        value={formData.semester || 1}
+                        onChange={e => setFormData({ ...formData, semester: Number(e.target.value) })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
+                          <option key={s} value={s}>Semester {s}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Section *</label>
+                      <select
+                        value={formData.section || 'A'}
+                        onChange={e => setFormData({ ...formData, section: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="A">Section A</option>
+                        <option value="B">Section B</option>
+                        <option value="C">Section C</option>
+                        <option value="D">Section D</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                        {modalMode === 'edit' ? 'Password (leave blank to keep)' : 'Password *'}
+                      </label>
+                      <input
+                        type="password"
+                        required={modalMode === 'add'}
+                        placeholder={modalMode === 'edit' ? 'Leave blank to retain current' : 'Create password'}
+                        value={formData.password || ''}
+                        onChange={e => setFormData({ ...formData, password: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Approval Status *</label>
+                      <select
+                        value={formData.approvalStatus || 'approved'}
+                        onChange={e => setFormData({ ...formData, approvalStatus: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      >
+                        <option value="approved">Approved</option>
+                        <option value="pending">Pending Review</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Parent Name</label>
+                      <input
+                        type="text"
+                        placeholder="Parent / Guardian Name"
+                        value={formData.parentName || ''}
+                        onChange={e => setFormData({ ...formData, parentName: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Parent Phone</label>
+                      <input
+                        type="tel"
+                        placeholder="e.g. +91 9876543211"
+                        value={formData.parentPhone || ''}
+                        onChange={e => setFormData({ ...formData, parentPhone: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
                   </div>
                 )}
 
                 {crudTab === 'parents' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <input
-                      type="text"
-                      required
-                      placeholder="Parent Name"
-                      value={formData.name || ''}
-                      onChange={e => setFormData({ ...formData, name: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Child Roll No (e.g. 24CS01)"
-                      value={formData.childRollNo || ''}
-                      onChange={e => setFormData({ ...formData, childRollNo: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    />
-                    <input
-                      type="tel"
-                      required
-                      placeholder="Phone Number"
-                      value={formData.phone || ''}
-                      onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                      className="px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Parent Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Parent Full Name"
+                        value={formData.name || ''}
+                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Phone Number *</label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="e.g. +91 9876543210"
+                        value={formData.phone || ''}
+                        onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Email Address</label>
+                      <input
+                        type="email"
+                        placeholder="parent@gmail.com"
+                        value={formData.email || ''}
+                        onChange={e => setFormData({ ...formData, email: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                        Linked Student Roll No(s) * (multi-child)
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 22CSPC501, 22CSPC502"
+                        value={formData.childRollNos || ''}
+                        onChange={e => setFormData({ ...formData, childRollNos: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                        {modalMode === 'edit' ? 'Password (leave blank to keep)' : 'Password *'}
+                      </label>
+                      <input
+                        type="password"
+                        required={modalMode === 'add'}
+                        placeholder={modalMode === 'edit' ? 'Leave blank to retain current' : 'Create password'}
+                        value={formData.password || ''}
+                        onChange={e => setFormData({ ...formData, password: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Residential Address</label>
+                      <input
+                        type="text"
+                        placeholder="Street, City, Pin Code"
+                        value={formData.address || ''}
+                        onChange={e => setFormData({ ...formData, address: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl"
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -1004,20 +1420,77 @@ export const AdminDashboard: React.FC<Props> = ({
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase font-bold border-b border-slate-200 dark:border-slate-800">
-                  <tr>
-                    <th className="p-3">ID / Code</th>
-                    <th className="p-3">Name / Details</th>
-                    <th className="p-3">Info</th>
-                    <th className="p-3 text-right">Actions</th>
-                  </tr>
+                  {crudTab === 'students' && (
+                    <tr>
+                      <th className="p-3">Roll No</th>
+                      <th className="p-3">Name</th>
+                      <th className="p-3">Email</th>
+                      <th className="p-3">Department</th>
+                      <th className="p-3">Year / Sem</th>
+                      <th className="p-3">Section</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  )}
+                  {crudTab === 'faculty' && (
+                    <tr>
+                      <th className="p-3">Faculty Code</th>
+                      <th className="p-3">Name</th>
+                      <th className="p-3">Email</th>
+                      <th className="p-3">Department</th>
+                      <th className="p-3">Designation</th>
+                      <th className="p-3">Phone</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  )}
+                  {crudTab === 'parents' && (
+                    <tr>
+                      <th className="p-3">Parent Name</th>
+                      <th className="p-3">Email</th>
+                      <th className="p-3">Phone</th>
+                      <th className="p-3">Linked Student(s)</th>
+                      <th className="p-3">Address</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  )}
+                  {crudTab === 'subjects' && (
+                    <tr>
+                      <th className="p-3">Subject Code</th>
+                      <th className="p-3">Subject Name</th>
+                      <th className="p-3">Type</th>
+                      <th className="p-3">Credits</th>
+                      <th className="p-3">Department</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  )}
+                  {crudTab === 'timetable' && (
+                    <tr>
+                      <th className="p-3">Day</th>
+                      <th className="p-3">Subject</th>
+                      <th className="p-3">Time Slot & Room</th>
+                      <th className="p-3">Department / Sem</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  )}
+                  {crudTab === 'departments' && (
+                    <tr>
+                      <th className="p-3">Dept Code</th>
+                      <th className="p-3">Department Name</th>
+                      <th className="p-3">HOD Name</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  )}
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {crudTab === 'subjects' && subjects.map(sub => (
                     <tr key={sub.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                       <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{sub.code}</td>
                       <td className="p-3 font-bold text-slate-900 dark:text-white">{sub.name}</td>
-                      <td className="p-3 text-slate-500">{sub.type} • {sub.credits} Credits</td>
-                      <td className="p-3 text-right space-x-2">
+                      <td className="p-3 font-semibold">{sub.type}</td>
+                      <td className="p-3 text-slate-500">{sub.credits} Credits</td>
+                      <td className="p-3 text-slate-500">{sub.department}</td>
+                      <td className="p-3 text-right space-x-2 whitespace-nowrap">
                         <button onClick={() => openEditModal(sub)} className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg"><Edit className="w-4 h-4" /></button>
                         <button onClick={() => promptDelete('subject', sub.id, sub.name, `${sub.code} • ${sub.type} • Linked timetable slots will also be deleted`)} className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                       </td>
@@ -1028,8 +1501,20 @@ export const AdminDashboard: React.FC<Props> = ({
                     <tr key={fac.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                       <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{fac.facultyCode}</td>
                       <td className="p-3 font-bold text-slate-900 dark:text-white">{fac.name}</td>
-                      <td className="p-3 text-slate-500">{fac.department} • {fac.designation}</td>
-                      <td className="p-3 text-right space-x-2">
+                      <td className="p-3 text-slate-500 font-mono text-[11px]">{fac.email}</td>
+                      <td className="p-3 text-slate-500">{fac.department}</td>
+                      <td className="p-3 text-slate-600 dark:text-slate-300">{fac.designation}</td>
+                      <td className="p-3 text-slate-500 font-mono text-[11px]">{fac.phone || '—'}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+                          fac.approvalStatus === 'approved'
+                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800'
+                            : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
+                        }`}>
+                          {fac.approvalStatus || 'approved'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right space-x-2 whitespace-nowrap">
                         <button onClick={() => openEditModal(fac)} className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg"><Edit className="w-4 h-4" /></button>
                         <button onClick={() => promptDelete('faculty', fac.id, fac.name, `Code: ${fac.facultyCode} • ${fac.department}`)} className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                       </td>
@@ -1040,32 +1525,64 @@ export const AdminDashboard: React.FC<Props> = ({
                     <tr key={st.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                       <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{st.rollNo}</td>
                       <td className="p-3 font-bold text-slate-900 dark:text-white">{st.name}</td>
-                      <td className="p-3 text-slate-500">{st.department} • {st.year}</td>
-                      <td className="p-3 text-right space-x-2">
+                      <td className="p-3 text-slate-500 font-mono text-[11px]">{st.email}</td>
+                      <td className="p-3 text-slate-500">{st.department}</td>
+                      <td className="p-3 text-slate-600 dark:text-slate-300 font-medium">{st.year || '1st Year'} (Sem {st.semester || 1})</td>
+                      <td className="p-3 font-bold text-center text-slate-700 dark:text-slate-300">{st.section || 'A'}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+                          st.approvalStatus === 'approved'
+                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800'
+                            : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
+                        }`}>
+                          {st.approvalStatus || 'approved'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right space-x-2 whitespace-nowrap">
                         <button onClick={() => openEditModal(st)} className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg"><Edit className="w-4 h-4" /></button>
                         <button onClick={() => promptDelete('student', st.id, st.name, `Roll No: ${st.rollNo} • ${st.department}`)} className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                       </td>
                     </tr>
                   ))}
 
-                  {crudTab === 'parents' && parents.map(par => (
-                    <tr key={par.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                      <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{par.childRollNo}</td>
-                      <td className="p-3 font-bold text-slate-900 dark:text-white">{par.name}</td>
-                      <td className="p-3 text-slate-500">{par.email} • {par.phone}</td>
-                      <td className="p-3 text-right space-x-2">
-                        <button onClick={() => openEditModal(par)} className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg"><Edit className="w-4 h-4" /></button>
-                        <button onClick={() => promptDelete('parent', par.id, par.name, `Child Roll: ${par.childRollNo} • ${par.phone}`)} className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                      </td>
-                    </tr>
-                  ))}
+                  {crudTab === 'parents' && parents.map(par => {
+                    const linked = (par.childRollNos && par.childRollNos.length > 0)
+                      ? par.childRollNos
+                      : (par.childRollNo ? [par.childRollNo] : []);
+                    return (
+                      <tr key={par.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="p-3 font-bold text-slate-900 dark:text-white">{par.name}</td>
+                        <td className="p-3 text-slate-500 font-mono text-[11px]">{par.email || '—'}</td>
+                        <td className="p-3 font-mono font-semibold text-slate-700 dark:text-slate-300">{par.phone}</td>
+                        <td className="p-3">
+                          <div className="flex flex-wrap gap-1">
+                            {linked.length > 0 ? (
+                              linked.map((r, i) => (
+                                <span key={i} className="px-2 py-0.5 text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 rounded-md border border-amber-200 dark:border-amber-800">
+                                  {r}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-slate-400 italic">None</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3 text-slate-500 text-[11px]">{par.address || '—'}</td>
+                        <td className="p-3 text-right space-x-2 whitespace-nowrap">
+                          <button onClick={() => openEditModal(par)} className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg"><Edit className="w-4 h-4" /></button>
+                          <button onClick={() => promptDelete('parent', par.id, par.name, `Phone: ${par.phone} • Child: ${linked.join(', ')}`)} className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                        </td>
+                      </tr>
+                    );
+                  })}
 
                   {crudTab === 'timetable' && timetable.map(tt => (
                     <tr key={tt.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                       <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{tt.dayOfWeek}</td>
                       <td className="p-3 font-bold text-slate-900 dark:text-white">{tt.subjectCode} - {tt.subjectName}</td>
                       <td className="p-3 text-slate-500">{tt.timeSlot} ({tt.roomNo})</td>
-                      <td className="p-3 text-right space-x-2">
+                      <td className="p-3 text-slate-500">{tt.department} • Sem {tt.semester} ({tt.section})</td>
+                      <td className="p-3 text-right space-x-2 whitespace-nowrap">
                         <button onClick={() => openEditModal(tt)} className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg"><Edit className="w-4 h-4" /></button>
                         <button onClick={() => promptDelete('timetable', tt.id, `${tt.subjectCode} - ${tt.subjectName || 'Slot'}`, `${tt.dayOfWeek} • ${tt.timeSlot} (${tt.roomNo})`)} className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                       </td>
@@ -1077,7 +1594,7 @@ export const AdminDashboard: React.FC<Props> = ({
                       <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{dept.code}</td>
                       <td className="p-3 font-bold text-slate-900 dark:text-white">{dept.name}</td>
                       <td className="p-3 text-slate-500">HOD: {dept.hodName || 'Dr. Arthur Vance'}</td>
-                      <td className="p-3 text-right space-x-2">
+                      <td className="p-3 text-right space-x-2 whitespace-nowrap">
                         <button onClick={() => openEditModal(dept)} className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg"><Edit className="w-4 h-4" /></button>
                         <button onClick={() => promptDelete('department', dept.id, dept.name, `Code: ${dept.code} • HOD: ${dept.hodName || 'N/A'}`)} className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                       </td>

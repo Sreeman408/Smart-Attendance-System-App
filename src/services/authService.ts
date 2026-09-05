@@ -267,11 +267,16 @@ export async function loginUser(emailOrId: string, passwordInput: string, role: 
   // 4. PARENT LOGIN
   if (role === 'parent') {
     const parents = await fetchParentsFromDB();
-    const parentFound = parents.find(p => p.email.toLowerCase() === input || p.phone.includes(input));
+    const parentFound = parents.find(p => p.email?.toLowerCase() === input || (p.phone && p.phone.includes(input)));
     
     const students = await fetchStudentsFromDB();
     const childMatches = students.filter(s =>
-      s.email.toLowerCase().includes(input) || (s.parentPhone && s.parentPhone.includes(input)) || (parentFound && parentFound.childRollNo === s.rollNo)
+      s.email.toLowerCase().includes(input) ||
+      (s.parentPhone && s.parentPhone.includes(input)) ||
+      (parentFound && (
+        (parentFound.childRollNo && parentFound.childRollNo.toLowerCase() === s.rollNo.toLowerCase()) ||
+        (parentFound.childRollNos && parentFound.childRollNos.map(r => r.toLowerCase()).includes(s.rollNo.toLowerCase()))
+      ))
     );
 
     if (childMatches.length === 0 && !parentFound) {

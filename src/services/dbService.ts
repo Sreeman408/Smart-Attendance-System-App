@@ -196,9 +196,10 @@ export async function fetchStudentsFromDB(): Promise<Student[]> {
         rollNo: roll,
         name: d.name,
         email: d.email,
+        phone: d.phone || d.student_phone || d.studentPhone || '',
         department: d.department || 'Department of Computer Science & Engineering',
         year: d.year || '3rd Year',
-        semester: d.semester || 5,
+        semester: Number(d.semester || 5),
         section: d.section || 'B',
         parentId: d.parent_id || d.parentId,
         parentName: d.parent_name || d.parentName,
@@ -227,6 +228,7 @@ export async function fetchStudentsFromDB(): Promise<Student[]> {
               rollNo: roll,
               name: u.name,
               email: u.email || `${roll}@college.edu`,
+              phone: u.phone || '',
               department: u.dept_id === 'cse' ? 'Department of Computer Science & Engineering' : (u.dept_id || 'Department of Computer Science & Engineering'),
               year: '3rd Year',
               semester: 5,
@@ -260,6 +262,7 @@ export async function saveStudentToDB(student: Student): Promise<boolean> {
     rollNo: student.rollNo,
     name: student.name,
     email: student.email,
+    phone: student.phone || null,
     department: student.department,
     year: student.year,
     semester: student.semester,
@@ -285,6 +288,7 @@ export async function saveStudentToDB(student: Student): Promise<boolean> {
         id: student.id,
         name: student.name,
         email: student.email,
+        phone: student.phone || null,
         role: 'student',
         dept_id: 'cse',
         roll: student.rollNo,
@@ -452,6 +456,8 @@ export async function saveFacultyToDB(fac: Faculty): Promise<boolean> {
     department: fac.department,
     designation: fac.designation,
     phone: fac.phone,
+    subjects_handled: fac.subjectsHandled,
+    subjectsHandled: fac.subjectsHandled,
     approval_status: fac.approvalStatus,
     approvalStatus: fac.approvalStatus,
     password_hash: fac.passwordHash || null,
@@ -466,6 +472,7 @@ export async function saveFacultyToDB(fac: Faculty): Promise<boolean> {
         id: fac.id,
         name: fac.name,
         email: fac.email,
+        phone: fac.phone || null,
         role: 'staff',
         dept_id: 'cse',
         login_id: fac.facultyCode,
@@ -1208,39 +1215,126 @@ export async function addAuditLogDB(userId: string, userName: string, userRole: 
   cached.unshift(newLog);
   await setCachedData(PREF_KEYS.LOGS, cached.slice(0, 100));
 }
-
 // -------------------------------------------------------------
 // 10. PARENTS & DEPARTMENTS SERVICES
 // -------------------------------------------------------------
 export async function fetchParentsFromDB(): Promise<ParentRecord[]> {
+  const supabase = getSupabaseClient();
+  let cloudParents: ParentRecord[] = [];
+
   const cloudData = await fetchCloudRecords<any>('parents');
   if (cloudData !== null) {
-    const mapped: ParentRecord[] = cloudData.map((d: any) => ({
-      id: d.id,
-      name: d.name,
-      email: d.email,
-      phone: d.phone,
-      childRollNo: d.child_roll_no || d.childRollNo || '',
-      childName: d.child_name || d.childName,
-      createdAt: d.created_at || d.createdAt
-    }));
-    await setCachedData(PREF_KEYS.PARENTS, mapped);
-    return mapped;
+    cloudParents = cloudData.map((d: any) => {
+      let rollNos: string[] = [];
+      if (Array.isArray(d.child_roll_nos || d.childRollNos)) {
+        rollNos = (d.child_roll_nos || d.childRollNos).map((r: any) => String(r).trim()).filter(Boolean);
+      } else if (typeof (d.child_roll_nos || d.childRollNos) === 'string') {
+        rollNos = (d.child_roll_nos || d.childRollNos).split(',').map((s: string) => s.trim()).filter(Boolean);
+      }
+      const primary = d.child_roll_no || d.childRollNo || rollNos[0] || '';
+      if (primary && !rollNos.includes(primary)) {
+        rollNos.unshift(primary);
+      }
+
+      return {
+        id: d.id,
+        name: d.name,
+        email: d.email || '',
+        phone: d.phone || '',
+        childRollNo: primary,
+        childRollNos: rollNos,
+        childName: d.child_name || d.childName || '',
+        address: d.address || '',
+        passwordHash: d.password_hash || d.passwordHash,
+        createdAt: d.created_at || d.createdAt
+      };
+    });
   }
+
+  // Also query users table for role='parent' to enrich passwords or missing parents
+  if (supabase) {
+    try {
+      const { data: userParents } = await supabase.from('users').select('*').eq('role', 'parent');
+      if (userParents && userParents.length > 0) {
+        for (const u of userParents) {
+          const existing = cloudParents.find(p => p.id === u.id || (u.email && p.email?.toLowerCase() === u.email.toLowerCase()));
+          if (existing) {
+            if (!existing.passwordHash && u.password_hash) {
+              existing.passwordHash = u.password_hash;
+            }
+            if (!existing.phone && u.phone) {
+              existing.phone = u.phone;
+            }
+          } else {
+            cloudParents.push({
+              id: u.id,
+              name: u.name || 'Ward Parent',
+              email: u.email || '',
+              phone: u.phone || '',
+              childRollNo: '',
+              childRollNos: [],
+              address: '',
+              passwordHash: u.password_hash,
+              createdAt: u.created_at
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Error reading parent users:', err);
+    }
+  }
+
+  if (cloudData !== null || cloudParents.length > 0) {
+    await setCachedData(PREF_KEYS.PARENTS, cloudParents);
+    return cloudParents;
+  }
+
   return getCachedData<ParentRecord[]>(PREF_KEYS.PARENTS, INITIAL_PARENTS);
 }
 
 export async function saveParentToDB(parent: ParentRecord): Promise<boolean> {
+  const childRollNos = parent.childRollNos && parent.childRollNos.length > 0
+    ? parent.childRollNos
+    : (parent.childRollNo ? [parent.childRollNo] : []);
+  const primaryChild = parent.childRollNo || (childRollNos[0] || '');
+
   const cloudOk = await saveCloudRecord('parents', {
     id: parent.id,
     name: parent.name,
     email: parent.email,
     phone: parent.phone,
-    child_roll_no: parent.childRollNo,
-    childRollNo: parent.childRollNo,
-    child_name: parent.childName,
-    childName: parent.childName
+    child_roll_no: primaryChild,
+    childRollNo: primaryChild,
+    child_roll_nos: childRollNos,
+    childRollNos: childRollNos,
+    child_name: parent.childName || '',
+    childName: parent.childName || '',
+    address: parent.address || '',
+    password_hash: parent.passwordHash || '',
+    passwordHash: parent.passwordHash || '',
+    createdAt: parent.createdAt || new Date().toISOString()
   });
+
+  // Also dual-write / upsert into `users` table for parent authentication
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const loginId = parent.phone || parent.email || `PAR_${primaryChild || parent.id}`;
+      await supabase.from('users').upsert({
+        id: parent.id,
+        login_id: loginId,
+        name: parent.name,
+        email: parent.email || '',
+        phone: parent.phone || '',
+        role: 'parent',
+        password_hash: parent.passwordHash || null,
+        department: 'General'
+      }, { onConflict: 'id' });
+    } catch (err) {
+      console.warn('Dual-write to users table for parent skipped/failed:', err);
+    }
+  }
 
   const cached = await getCachedData<ParentRecord[]>(PREF_KEYS.PARENTS, []);
   const idx = cached.findIndex(p => p.id === parent.id);
@@ -1267,16 +1361,21 @@ export async function deleteParentFromDB(id: string): Promise<DeleteResult> {
     if (parent?.childRollNo) {
       await supabase.from('users').delete().eq('login_id', `PAR_${parent.childRollNo}`);
     }
+    if (parent?.phone) {
+      await supabase.from('users').delete().eq('login_id', parent.phone);
+    }
     await supabase.from('audit_logs').delete().eq('id', `SYNC_parents_${id}`);
     await supabase.from('audit_logs').delete().eq('action', 'CLOUD_SYNC::parents').eq('user_id', id);
 
     const updated = cached.filter(p => p.id !== id);
     await setCachedData(PREF_KEYS.PARENTS, updated);
 
-    return { success: true, message: `Parent ${displayName} deleted successfully.` };
+    return {
+      success: true,
+      message: `Parent "${displayName}" successfully deleted from cloud and local storage.`
+    };
   } catch (err: any) {
-    console.error('Error deleting parent:', err);
-    return { success: false, message: `Failed to delete parent: ${err?.message || 'Network error'}` };
+    return { success: false, message: `Failed to delete parent: ${err?.message || 'Database error'}` };
   }
 }
 
