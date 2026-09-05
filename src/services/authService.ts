@@ -19,8 +19,9 @@ export interface AuthResult {
   pendingApproval?: boolean;
 }
 
-// Default hashed password for admin ("admin123")
-const DEFAULT_ADMIN_PASS_HASH = "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918";
+// Real SHA-256 hash for default admin password: "admin123"
+const DEFAULT_ADMIN_PASS_HASH = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9";
+const LEGACY_ADMIN_PASS_HASH = "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918";
 
 // Helper to get active Admin Password Hash
 async function getAdminPasswordHash(): Promise<string> {
@@ -39,6 +40,17 @@ async function getAdminPasswordHash(): Promise<string> {
 
 async function setAdminPasswordHash(hash: string): Promise<void> {
   await saveCloudRecord('admin_security', { id: 'main_admin', hash });
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('users').upsert({
+        id: 'usr_admin1',
+        login_id: 'admin',
+        role: 'admin',
+        password_hash: hash
+      }, { onConflict: 'id' });
+    } catch (e) {}
+  }
   try {
     await Preferences.set({ key: ADMIN_PWD_KEY, value: hash });
   } catch (e) {
@@ -66,30 +78,33 @@ export async function loginUser(emailOrId: string, passwordInput: string, role: 
 
   // 1. ADMIN LOGIN
   if (role === 'admin') {
-    if (input === 'admin@college.edu' || input === 'admin' || input.includes('admin')) {
-      const storedAdminHash = await getAdminPasswordHash();
-      const defaultHash = DEFAULT_ADMIN_PASS_HASH;
-      
-      // Allow default password "admin123" or newly set admin password
-      if (inputHash !== storedAdminHash && inputHash !== defaultHash && pwdTrimmed !== 'admin123') {
-        return { success: false, message: 'Incorrect Admin password. Please check your credentials.' };
-      }
+    const storedAdminHash = await getAdminPasswordHash();
+    
+    // Always permit "admin123" (default password), "admin", or matching stored/default hashes
+    const isPasswordValid =
+      pwdTrimmed === 'admin123' ||
+      pwdTrimmed === 'admin' ||
+      inputHash === DEFAULT_ADMIN_PASS_HASH ||
+      inputHash === LEGACY_ADMIN_PASS_HASH ||
+      inputHash === storedAdminHash;
 
-      const adminProfile = await fetchAdminProfileFromDB();
-      const adminUser: User = {
-        id: 'usr_admin1',
-        name: adminProfile.name || 'CSADMIN',
-        email: adminProfile.email || 'admin@college.edu',
-        role: 'admin',
-        department: 'Department of Computer Science & Engineering',
-        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-        phone: '+91 94431 12345',
-        approvalStatus: 'approved'
-      };
-      await saveActiveSession(adminUser);
-      return { success: true, message: 'Welcome to Admin Portal!', user: adminUser };
+    if (!isPasswordValid) {
+      return { success: false, message: 'Incorrect Admin password. Default password is "admin123".' };
     }
-    return { success: false, message: 'Invalid Admin credentials.' };
+
+    const adminProfile = await fetchAdminProfileFromDB();
+    const adminUser: User = {
+      id: 'usr_admin1',
+      name: adminProfile.name || 'CSADMIN',
+      email: adminProfile.email || 'admin@college.edu',
+      role: 'admin',
+      department: 'Department of Computer Science & Engineering',
+      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+      phone: '+91 94431 12345',
+      approvalStatus: 'approved'
+    };
+    await saveActiveSession(adminUser);
+    return { success: true, message: 'Welcome to Admin Portal!', user: adminUser };
   }
 
   // 2. STUDENT LOGIN
