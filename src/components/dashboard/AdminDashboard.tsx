@@ -37,12 +37,12 @@ interface Props {
 }
 
 export const AdminDashboard: React.FC<Props> = ({
-  students,
-  faculty,
-  subjects,
-  timetable,
-  leaves,
-  activeTab,
+  students = [],
+  faculty = [],
+  subjects = [],
+  timetable = [],
+  leaves = [],
+  activeTab = 'dashboard',
   onTabChange,
   onDataChanged
 }) => {
@@ -98,29 +98,41 @@ export const AdminDashboard: React.FC<Props> = ({
   }, [activeTab]);
 
   const loadExtraAdminData = async () => {
-    const pars = await fetchParentsFromDB();
-    const depts = await fetchDepartmentsFromDB();
-    const atts = await fetchAttendanceRecordsFromDB();
-    setParents(pars);
-    setDepartments(depts);
-    setAttendanceList(atts);
+    try {
+      const [pars, depts, atts] = await Promise.all([
+        fetchParentsFromDB().catch(e => { console.warn('Parents load error:', e); return []; }),
+        fetchDepartmentsFromDB().catch(e => { console.warn('Departments load error:', e); return []; }),
+        fetchAttendanceRecordsFromDB().catch(e => { console.warn('Attendance load error:', e); return []; })
+      ]);
+      if (Array.isArray(pars)) setParents(pars);
+      if (Array.isArray(depts)) setDepartments(depts);
+      if (Array.isArray(atts)) setAttendanceList(atts);
+    } catch (e) {
+      console.warn('loadExtraAdminData error:', e);
+    }
   };
 
-  const sortedStudents = sortStudentsByRollNumber(students);
+  const safeStudents = Array.isArray(students) ? students : [];
+  const safeFaculty = Array.isArray(faculty) ? faculty : [];
+  const safeSubjects = Array.isArray(subjects) ? subjects : [];
+  const safeAttendance = Array.isArray(attendanceList) ? attendanceList : [];
+
+  const sortedStudents = sortStudentsByRollNumber(safeStudents);
 
   // Calculate Student Attendance Stats for Analytics
   const studentStats = sortedStudents.map(st => {
-    const stAtts = attendanceList.filter(a => a.studentId === st.id);
-    const summary = calculateOverallAttendance(stAtts, subjects);
+    const stAtts = safeAttendance.filter(a => a && a.studentId === st.id);
+    const summary = calculateOverallAttendance(stAtts, safeSubjects);
     return {
       student: st,
       summary
     };
   });
 
-  const safeCount = studentStats.filter(s => s.summary.percentage >= 85).length;
-  const avgCount = studentStats.filter(s => s.summary.percentage >= 75 && s.summary.percentage < 85).length;
-  const shortageCount = studentStats.filter(s => s.summary.percentage < 75).length;
+  const safeCount = studentStats.filter(s => s.summary && s.summary.percentage >= 85).length;
+  const avgCount = studentStats.filter(s => s.summary && s.summary.percentage >= 75 && s.summary.percentage < 85).length;
+  const shortageCount = studentStats.filter(s => s.summary && s.summary.percentage < 75).length;
+  const totalPieCount = safeCount + avgCount + shortageCount;
 
   const pieData = [
     { name: 'Safe (>=85%)', value: safeCount, color: '#10b981' },
@@ -128,13 +140,13 @@ export const AdminDashboard: React.FC<Props> = ({
     { name: 'Shortage Risk (<75%)', value: shortageCount, color: '#f43f5e' }
   ];
 
-  const barData = subjects.map(sub => {
-    const subAtts = attendanceList.filter(a => a.subjectId === sub.id);
+  const barData = safeSubjects.map(sub => {
+    const subAtts = safeAttendance.filter(a => a && a.subjectId === sub.id);
     const presentCount = subAtts.filter(a => a.status === 'present').length;
     const totalCount = subAtts.length || 1;
     const avgPct = Math.round((presentCount / totalCount) * 100);
     return {
-      subject: sub.code,
+      subject: sub.code || sub.name || 'Subject',
       attendance: avgPct
     };
   });
@@ -632,18 +644,28 @@ export const AdminDashboard: React.FC<Props> = ({
                 <PieChartIcon className="w-4 h-4 text-amber-500" />
                 Overall Attendance Distribution
               </h3>
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(val) => [`${val} Students`, 'Count']} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="h-64 w-full min-h-[256px] flex items-center justify-center">
+                {totalPieCount > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
+                    <PieChart>
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                        {pieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(val) => [`${val} Students`, 'Count']} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                    <PieChartIcon className="w-12 h-12 text-slate-300 dark:text-slate-700 mb-2 stroke-[1.5]" />
+                    <p className="text-xs font-bold text-slate-600 dark:text-slate-400">No Attendance Metrics Yet</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
+                      Attendance distribution will calculate automatically as class sessions are recorded.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -653,15 +675,25 @@ export const AdminDashboard: React.FC<Props> = ({
                 <BarChart2 className="w-4 h-4 text-amber-500" />
                 Subject Average Attendance %
               </h3>
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={barData}>
-                    <XAxis dataKey="subject" stroke="#94a3b8" fontSize={11} />
-                    <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
-                    <Tooltip formatter={(val) => [`${val}%`, 'Avg Attendance']} />
-                    <Bar dataKey="attendance" fill="#d97706" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="h-64 w-full min-h-[256px] flex items-center justify-center">
+                {barData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
+                    <BarChart data={barData}>
+                      <XAxis dataKey="subject" stroke="#94a3b8" fontSize={11} />
+                      <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} />
+                      <Tooltip formatter={(val) => [`${val}%`, 'Avg Attendance']} />
+                      <Bar dataKey="attendance" fill="#d97706" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                    <BarChart2 className="w-12 h-12 text-slate-300 dark:text-slate-700 mb-2 stroke-[1.5]" />
+                    <p className="text-xs font-bold text-slate-600 dark:text-slate-400">No Subjects Configured</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
+                      Add subjects in Management to track subject-wise attendance averages.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -760,8 +792,15 @@ export const AdminDashboard: React.FC<Props> = ({
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {studentStats
                       .filter(s => {
-                        if (filterShortageOnly && s.summary.percentage >= 75) return false;
-                        if (searchQuery && !s.student.name.toLowerCase().includes(searchQuery.toLowerCase()) && !s.student.rollNo.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                        if (!s || !s.student) return false;
+                        if (filterShortageOnly && s.summary && s.summary.percentage >= 75) return false;
+                        if (searchQuery) {
+                          const q = searchQuery.toLowerCase();
+                          const sName = (s.student.name || '').toLowerCase();
+                          const sRoll = (s.student.rollNo || '').toLowerCase();
+                          const sDept = (s.student.department || '').toLowerCase();
+                          if (!sName.includes(q) && !sRoll.includes(q) && !sDept.includes(q)) return false;
+                        }
                         return true;
                       })
                       .map(({ student: st, summary }) => (
@@ -829,7 +868,15 @@ export const AdminDashboard: React.FC<Props> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {faculty
-                      .filter(f => !searchQuery || f.name.toLowerCase().includes(searchQuery.toLowerCase()) || f.facultyCode.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .filter(f => {
+                        if (!f) return false;
+                        if (!searchQuery) return true;
+                        const q = searchQuery.toLowerCase();
+                        const fName = (f.name || '').toLowerCase();
+                        const fCode = (f.facultyCode || '').toLowerCase();
+                        const fDept = (f.department || '').toLowerCase();
+                        return fName.includes(q) || fCode.includes(q) || fDept.includes(q);
+                      })
                       .map(f => (
                         <tr key={f.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                           <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{f.facultyCode}</td>
@@ -889,7 +936,17 @@ export const AdminDashboard: React.FC<Props> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {parents
-                      .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.childRollNo.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .filter(p => {
+                        if (!p) return false;
+                        if (!searchQuery) return true;
+                        const q = searchQuery.toLowerCase();
+                        const pName = (p.name || '').toLowerCase();
+                        const pEmail = (p.email || '').toLowerCase();
+                        const pPhone = (p.phone || '').toLowerCase();
+                        const pRoll = (p.childRollNo || '').toLowerCase();
+                        const linked = Array.isArray(p.childRollNos) ? p.childRollNos.map(r => String(r || '').toLowerCase()) : [];
+                        return pName.includes(q) || pEmail.includes(q) || pPhone.includes(q) || pRoll.includes(q) || linked.some(r => r.includes(q));
+                      })
                       .map(p => {
                         const linked = (p.childRollNos && p.childRollNos.length > 0)
                           ? p.childRollNos
@@ -956,7 +1013,15 @@ export const AdminDashboard: React.FC<Props> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {subjects
-                      .filter(s => !searchQuery || s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.code.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .filter(s => {
+                        if (!s) return false;
+                        if (!searchQuery) return true;
+                        const q = searchQuery.toLowerCase();
+                        const sName = (s.name || '').toLowerCase();
+                        const sCode = (s.code || '').toLowerCase();
+                        const sDept = (s.department || '').toLowerCase();
+                        return sName.includes(q) || sCode.includes(q) || sDept.includes(q);
+                      })
                       .map(s => (
                         <tr key={s.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                           <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{s.code}</td>
@@ -1883,7 +1948,7 @@ export const AdminDashboard: React.FC<Props> = ({
                         <td className="p-3 text-slate-500 text-[11px]">{par.address || '—'}</td>
                         <td className="p-3 text-right space-x-2 whitespace-nowrap">
                           <button onClick={() => openEditModal(par)} className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg"><Edit className="w-4 h-4" /></button>
-                          <button onClick={() => promptDelete('parent', par.id, par.name, `Phone: ${par.phone} • Child: ${linked.join(', ')}`)} className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                          <button onClick={() => promptDelete('parent', par.id, par.name, `Phone: ${par.phone || '—'} • Child: ${linked.join(', ') || 'None'}`)} className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                         </td>
                       </tr>
                     );

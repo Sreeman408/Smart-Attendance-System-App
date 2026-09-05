@@ -39,11 +39,12 @@ export const PendingApprovalsManager: React.FC<PendingApprovalsManagerProps> = (
 
   const filtered = requests.filter(r => {
     const matchesStatus = viewStatusTab === 'all' || r.status === viewStatusTab;
-    const matchesSearch =
-      r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (r.rollNo && r.rollNo.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (r.facultyCode && r.facultyCode.toLowerCase().includes(searchQuery.toLowerCase()));
+    const q = searchQuery.toLowerCase();
+    const matchesSearch = !searchQuery ||
+      (r.name || '').toLowerCase().includes(q) ||
+      (r.email || '').toLowerCase().includes(q) ||
+      (Boolean(r.rollNo) && (r.rollNo || '').toLowerCase().includes(q)) ||
+      (Boolean(r.facultyCode) && (r.facultyCode || '').toLowerCase().includes(q));
     const matchesRole = filterRole === 'all' || r.role === filterRole;
     return matchesStatus && matchesSearch && matchesRole;
   });

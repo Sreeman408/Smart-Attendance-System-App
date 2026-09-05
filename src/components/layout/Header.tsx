@@ -101,10 +101,10 @@ export const Header: React.FC<Props> = ({
               className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800 hover:opacity-80 transition-opacity"
             >
               <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-red-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
-                {currentUser.name.charAt(0)}
+                {(currentUser?.name || 'Admin').charAt(0).toUpperCase()}
               </div>
               <span className="hidden md:inline text-xs font-bold text-slate-800 dark:text-slate-200">
-                {currentUser.name}
+                {currentUser?.name || 'Admin'}
               </span>
             </button>
 

@@ -11,11 +11,17 @@ export const SaturdayConfigManager: React.FC = () => {
 
   useEffect(() => {
     async function loadData() {
-      const cfg = await fetchSaturdayConfigFromDB();
-      setConfig(cfg);
-      const records = await fetchAttendanceRecordsFromDB();
-      const satRecs = records.filter(r => r.isSaturday || new Date(r.date).getDay() === 6);
-      setSaturdayRecordsCount(satRecs.length);
+      try {
+        const [cfg, records] = await Promise.all([
+          fetchSaturdayConfigFromDB().catch(() => ({ mappedDay: 'Monday' as const, enabled: true })),
+          fetchAttendanceRecordsFromDB().catch(() => [])
+        ]);
+        setConfig(cfg || { mappedDay: 'Monday' as const, enabled: true });
+        const satRecs = (records || []).filter(r => r && (r.isSaturday || new Date(r.date).getDay() === 6));
+        setSaturdayRecordsCount(satRecs.length);
+      } catch (e) {
+        console.warn('Saturday load error:', e);
+      }
     }
     loadData();
   }, []);

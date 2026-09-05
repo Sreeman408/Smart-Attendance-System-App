@@ -13,6 +13,7 @@ import { StudentDashboard } from './components/dashboard/StudentDashboard';
 import { FacultyDashboard } from './components/dashboard/FacultyDashboard';
 import { ParentDashboard } from './components/dashboard/ParentDashboard';
 import { AdminDashboard } from './components/dashboard/AdminDashboard';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ShieldAlert } from 'lucide-react';
 
 export default function App() {
@@ -35,45 +36,63 @@ export default function App() {
   // Load session & DB data on mount
   useEffect(() => {
     async function loadInitialData() {
-      setLoadingSession(true);
-      const session = await getStoredActiveSession();
-      if (session) {
-        if (session.role === 'admin') {
-          try {
-            const adminProf = await fetchAdminProfileFromDB();
-            if (adminProf.name) {
-              session.name = adminProf.name;
-            }
-          } catch (e) {}
+      try {
+        const session = await getStoredActiveSession();
+        if (session) {
+          if (session.role === 'admin') {
+            fetchAdminProfileFromDB().then(adminProf => {
+              if (adminProf?.name) {
+                session.name = adminProf.name;
+                setCurrentUser(prev => prev ? { ...prev, name: adminProf.name } : session);
+              }
+            }).catch(() => {});
+          }
+          setCurrentUser(session);
+          setActiveRole(session.role);
+          setDefaultTabForRole(session.role);
+          // Instantly unblock UI using cached data!
+          setLoadingSession(false);
+          // Sync fresh database in the background without blocking
+          refreshDBData().catch(console.error);
+        } else {
+          // No active session: immediately render LoginGateway (< 100ms)
+          setLoadingSession(false);
+          // Pre-fetch DB in the background
+          refreshDBData().catch(console.error);
         }
-        setCurrentUser(session);
-        setActiveRole(session.role);
-        setDefaultTabForRole(session.role);
+      } catch (e) {
+        console.warn('Error reading active session:', e);
+        setLoadingSession(false);
+        refreshDBData().catch(console.error);
       }
-      await refreshDBData();
-      setLoadingSession(false);
     }
     loadInitialData();
   }, []);
 
   const refreshDBData = async () => {
-    const stus = await fetchStudentsFromDB();
-    const facs = await fetchFacultyFromDB();
-    const subs = await fetchSubjectsFromDB();
-    const tt = await fetchTimetableFromDB();
-    const atts = await fetchAttendanceRecordsFromDB();
-    const lvs = await fetchLeavesFromDB();
-    const regs = await fetchRegistrationRequestsFromDB();
-    const pars = await fetchParentsFromDB();
+    try {
+      const [stus, facs, subs, tt, atts, lvs, regs, pars] = await Promise.all([
+        fetchStudentsFromDB().catch(e => { console.warn('Students fetch error:', e); return []; }),
+        fetchFacultyFromDB().catch(e => { console.warn('Faculty fetch error:', e); return []; }),
+        fetchSubjectsFromDB().catch(e => { console.warn('Subjects fetch error:', e); return []; }),
+        fetchTimetableFromDB().catch(e => { console.warn('Timetable fetch error:', e); return []; }),
+        fetchAttendanceRecordsFromDB().catch(e => { console.warn('Attendance fetch error:', e); return []; }),
+        fetchLeavesFromDB().catch(e => { console.warn('Leaves fetch error:', e); return []; }),
+        fetchRegistrationRequestsFromDB().catch(e => { console.warn('Registrations fetch error:', e); return []; }),
+        fetchParentsFromDB().catch(e => { console.warn('Parents fetch error:', e); return []; })
+      ]);
 
-    setStudents(stus);
-    setFaculty(facs);
-    setSubjects(subs);
-    setTimetable(tt);
-    setAttendanceRecords(atts);
-    setLeaves(lvs);
-    setRegistrations(regs);
-    setParents(pars);
+      if (Array.isArray(stus) && stus.length > 0) setStudents(stus);
+      if (Array.isArray(facs) && facs.length > 0) setFaculty(facs);
+      if (Array.isArray(subs) && subs.length > 0) setSubjects(subs);
+      if (Array.isArray(tt) && tt.length > 0) setTimetable(tt);
+      if (Array.isArray(atts)) setAttendanceRecords(atts);
+      if (Array.isArray(lvs)) setLeaves(lvs);
+      if (Array.isArray(regs)) setRegistrations(regs);
+      if (Array.isArray(pars) && pars.length > 0) setParents(pars);
+    } catch (err) {
+      console.error('refreshDBData error:', err);
+    }
   };
 
   const setDefaultTabForRole = (role: Role) => {
@@ -89,7 +108,8 @@ export default function App() {
     setCurrentUser(user);
     setActiveRole(user.role);
     setDefaultTabForRole(user.role);
-    await refreshDBData();
+    // Background sync without blocking navigation
+    refreshDBData().catch(console.error);
   };
 
   const handleLogout = async () => {
@@ -199,65 +219,74 @@ export default function App() {
 
         {/* Primary Content View */}
         <main className="flex-1 p-3 sm:p-6 overflow-y-auto">
-          
-          {effectiveRole === 'student' && (
-            currentStudent ? (
-              <StudentDashboard
-                student={currentStudent}
-                subjects={subjects}
-                attendanceRecords={attendanceRecords}
-                timetable={timetable}
+          <ErrorBoundary fallbackTitle="Dashboard Display Error" onReset={refreshDBData}>
+            {effectiveRole === 'student' && (
+              currentStudent ? (
+                <StudentDashboard
+                  student={currentStudent}
+                  subjects={subjects || []}
+                  attendanceRecords={attendanceRecords || []}
+                  timetable={timetable || []}
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                />
+              ) : (
+                <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                  <h3 className="font-bold text-lg text-slate-900 dark:text-white">Profile Pending Approval</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Your student registration is being reviewed by the Admin. Once approved, your profile and attendance will display here.
+                  </p>
+                </div>
+              )
+            )}
+
+            {effectiveRole === 'faculty' && (
+              currentFaculty ? (
+                <FacultyDashboard
+                  faculty={currentFaculty}
+                  subjects={subjects || []}
+                  students={students || []}
+                  timetable={timetable || []}
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                />
+              ) : (
+                <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                  <h3 className="font-bold text-lg text-slate-900 dark:text-white">Faculty Profile Loading</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Retrieving faculty assignment data...
+                  </p>
+                </div>
+              )
+            )}
+
+            {effectiveRole === 'parent' && (
+              <ParentDashboard
+                parentUser={currentUser}
+                students={linkedStudents || []}
+                subjects={subjects || []}
+                faculty={faculty || []}
+                attendanceRecords={attendanceRecords || []}
+                selectedChildId={selectedChildId}
+                onSelectChild={setSelectedChildId}
                 activeTab={activeTab}
-                onTabChange={setActiveTab}
+                timetable={timetable || []}
               />
-            ) : (
-              <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
-                <h3 className="font-bold text-lg text-slate-900 dark:text-white">Profile Pending Approval</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Your student registration is being reviewed by the Admin. Once approved, your profile and attendance will display here.
-                </p>
-              </div>
-            )
-          )}
+            )}
 
-          {effectiveRole === 'faculty' && currentFaculty && (
-            <FacultyDashboard
-              faculty={currentFaculty}
-              subjects={subjects}
-              students={students}
-              timetable={timetable}
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-            />
-          )}
-
-          {effectiveRole === 'parent' && (
-            <ParentDashboard
-              parentUser={currentUser}
-              students={linkedStudents}
-              subjects={subjects}
-              faculty={faculty}
-              attendanceRecords={attendanceRecords}
-              selectedChildId={selectedChildId}
-              onSelectChild={setSelectedChildId}
-              activeTab={activeTab}
-              timetable={timetable}
-            />
-          )}
-
-          {effectiveRole === 'admin' && (
-            <AdminDashboard
-              students={students}
-              faculty={faculty}
-              subjects={subjects}
-              timetable={timetable}
-              leaves={leaves}
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-              onDataChanged={refreshDBData}
-            />
-          )}
-
+            {effectiveRole === 'admin' && (
+              <AdminDashboard
+                students={students || []}
+                faculty={faculty || []}
+                subjects={subjects || []}
+                timetable={timetable || []}
+                leaves={leaves || []}
+                activeTab={activeTab || 'dashboard'}
+                onTabChange={setActiveTab}
+                onDataChanged={refreshDBData}
+              />
+            )}
+          </ErrorBoundary>
         </main>
       </div>
 
