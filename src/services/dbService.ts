@@ -26,7 +26,7 @@ const PREF_KEYS = {
   DEPARTMENTS: 'au_cms_clean_v10_departments'
 };
 
-// Helper for native Preferences caching
+// Helper for robust native Preferences & Web localStorage dual-caching
 async function getCachedData<T>(key: string, fallback: T): Promise<T> {
   try {
     const res = await Preferences.get({ key });
@@ -36,14 +36,28 @@ async function getCachedData<T>(key: string, fallback: T): Promise<T> {
   } catch (e) {
     console.warn(`Preferences read failed for ${key}:`, e);
   }
+  try {
+    const localVal = localStorage.getItem(key);
+    if (localVal) {
+      return JSON.parse(localVal) as T;
+    }
+  } catch (e) {
+    // Ignore localStorage error
+  }
   return fallback;
 }
 
 async function setCachedData<T>(key: string, data: T): Promise<void> {
+  const jsonStr = JSON.stringify(data);
   try {
-    await Preferences.set({ key, value: JSON.stringify(data) });
+    await Preferences.set({ key, value: jsonStr });
   } catch (e) {
     console.warn(`Preferences write failed for ${key}:`, e);
+  }
+  try {
+    localStorage.setItem(key, jsonStr);
+  } catch (e) {
+    console.warn(`localStorage write failed for ${key}:`, e);
   }
 }
 

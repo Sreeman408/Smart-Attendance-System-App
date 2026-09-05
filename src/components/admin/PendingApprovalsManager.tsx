@@ -12,6 +12,7 @@ export const PendingApprovalsManager: React.FC<PendingApprovalsManagerProps> = (
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRole, setFilterRole] = useState<'all' | 'student' | 'faculty'>('all');
+  const [viewStatusTab, setViewStatusTab] = useState<'pending' | 'all'>('pending');
   const [actionMsg, setActionMsg] = useState('');
 
   const loadRequests = async () => {
@@ -37,13 +38,14 @@ export const PendingApprovalsManager: React.FC<PendingApprovalsManagerProps> = (
   };
 
   const filtered = requests.filter(r => {
+    const matchesStatus = viewStatusTab === 'all' || r.status === viewStatusTab;
     const matchesSearch =
       r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (r.rollNo && r.rollNo.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (r.facultyCode && r.facultyCode.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesRole = filterRole === 'all' || r.role === filterRole;
-    return matchesSearch && matchesRole;
+    return matchesStatus && matchesSearch && matchesRole;
   });
 
   const pendingCount = requests.filter(r => r.status === 'pending').length;
@@ -85,16 +87,41 @@ export const PendingApprovalsManager: React.FC<PendingApprovalsManagerProps> = (
       {/* Controls Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         
-        {/* Search */}
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search by Name, Roll No, Code..."
-            className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
-          />
+        {/* Status Toggle & Search */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto">
+            <button
+              onClick={() => setViewStatusTab('pending')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewStatusTab === 'pending'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Pending ({pendingCount})
+            </button>
+            <button
+              onClick={() => setViewStatusTab('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewStatusTab === 'all'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              All History ({requests.length})
+            </button>
+          </div>
+
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search by Name, Roll No, Code..."
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+            />
+          </div>
         </div>
 
         {/* Role Filter */}
@@ -102,28 +129,28 @@ export const PendingApprovalsManager: React.FC<PendingApprovalsManagerProps> = (
           <button
             onClick={() => setFilterRole('all')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-              filterRole === 'all' ? 'bg-amber-500 text-slate-950 shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+              filterRole === 'all' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950 shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
             }`}
           >
-            All Requests ({requests.length})
+            All Roles
           </button>
           <button
             onClick={() => setFilterRole('student')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all ${
-              filterRole === 'student' ? 'bg-amber-500 text-slate-950 shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+              filterRole === 'student' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950 shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
             }`}
           >
             <GraduationCap className="w-3.5 h-3.5" />
-            Students ({requests.filter(r => r.role === 'student').length})
+            Students ({requests.filter(r => r.role === 'student' && (viewStatusTab === 'all' || r.status === viewStatusTab)).length})
           </button>
           <button
             onClick={() => setFilterRole('faculty')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all ${
-              filterRole === 'faculty' ? 'bg-amber-500 text-slate-950 shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+              filterRole === 'faculty' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950 shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
             }`}
           >
             <UserCheck className="w-3.5 h-3.5" />
-            Faculty ({requests.filter(r => r.role === 'faculty').length})
+            Faculty ({requests.filter(r => r.role === 'faculty' && (viewStatusTab === 'all' || r.status === viewStatusTab)).length})
           </button>
         </div>
 

@@ -75,10 +75,11 @@ export default function App() {
     }
   };
 
-  const handleLoginSuccess = (user: User) => {
+  const handleLoginSuccess = async (user: User) => {
     setCurrentUser(user);
     setActiveRole(user.role);
     setDefaultTabForRole(user.role);
+    await refreshDBData();
   };
 
   const handleLogout = async () => {
