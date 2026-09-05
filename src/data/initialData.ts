@@ -14,7 +14,7 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'usr_fac1',
     name: 'Dr. M. Balasubramanian',
-    email: 'balasubramanian@annamalai.edu',
+    email: 'balasubramanian@college.edu',
     role: 'faculty',
     facultyId: 'FAC_MB',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
@@ -25,7 +25,7 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'usr_fac2',
     name: 'Dr. K. Kavitha',
-    email: 'kavitha@annamalai.edu',
+    email: 'kavitha@college.edu',
     role: 'faculty',
     facultyId: 'FAC_KK',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
@@ -36,7 +36,7 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'usr_fac3',
     name: 'Dr. R. Saminathan',
-    email: 'saminathan@annamalai.edu',
+    email: 'saminathan@college.edu',
     role: 'faculty',
     facultyId: 'FAC_RS',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',

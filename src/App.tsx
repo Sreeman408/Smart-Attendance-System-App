@@ -98,7 +98,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center space-y-4 font-sans">
         <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm font-bold tracking-wider text-amber-400">Loading Annamalai University CMS...</p>
+        <p className="text-sm font-bold tracking-wider text-amber-400">Loading Smart Attendance CMS...</p>
       </div>
     );
   }

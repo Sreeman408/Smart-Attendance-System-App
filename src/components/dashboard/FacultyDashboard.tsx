@@ -106,6 +106,41 @@ export const FacultyDashboard: React.FC<Props> = ({
     setTimeout(() => setSaveSuccessMsg(null), 4000);
   };
 
+  const exportClassPercentageReport = () => {
+    if (!currentSubject) return;
+
+    const subjectRecords = allAttendance.filter(r => r.subjectId === currentSubject.id);
+
+    const reportRows = students.map(st => {
+      const studentRecs = subjectRecords.filter(r => r.studentId === st.id);
+      const totalClasses = studentRecs.length;
+      const attendedClasses = studentRecs.filter(r => r.status === 'present').length;
+      const percentage = totalClasses > 0 ? Math.round((attendedClasses / totalClasses) * 100) : 100;
+      
+      let statusTag = 'Safe';
+      if (percentage < 65) statusTag = 'Shortage';
+      else if (percentage < 75) statusTag = 'Borderline';
+
+      return {
+        'Student Roll No': st.rollNo,
+        'Student Name': st.name,
+        'Department': st.department,
+        'Semester & Section': `Sem ${st.semester} (${st.section})`,
+        'Subject Code': currentSubject.code,
+        'Subject Name': currentSubject.name,
+        'Total Classes Held': totalClasses,
+        'Classes Attended': attendedClasses,
+        'Attendance Percentage (%)': `${percentage}%`,
+        'Status Tag': statusTag
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(reportRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Class Attendance Percentage');
+    XLSX.writeFile(wb, `Class_Attendance_Report_${currentSubject.code}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const exportSaturdayReport = () => {
     const saturdayRecords = allAttendance.filter(r => r.isSaturday || new Date(r.date).getDay() === 6);
     if (saturdayRecords.length === 0) {
@@ -250,7 +285,15 @@ export const FacultyDashboard: React.FC<Props> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={exportClassPercentageReport}
+              className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-all"
+            >
+              <Download className="w-4 h-4" />
+              Download Class Percentage (CSV/Excel)
+            </button>
+
             <button
               onClick={exportSaturdayReport}
               className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-all"
@@ -375,21 +418,17 @@ export const FacultyDashboard: React.FC<Props> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 w-full sm:w-auto">
-                  {(['present', 'absent', 'late', 'excused'] as AttendanceStatus[]).map(stt => (
+                <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                  {(['present', 'absent'] as AttendanceStatus[]).map(stt => (
                     <button
                       key={stt}
                       onClick={() => handleStatusToggle(st.id, stt)}
-                      className={`flex-1 sm:flex-initial px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                      className={`flex-1 sm:flex-initial px-4 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
                         currentStatus === stt
                           ? stt === 'present'
-                            ? 'bg-emerald-600 text-white shadow-sm'
-                            : stt === 'absent'
-                            ? 'bg-rose-600 text-white shadow-sm'
-                            : stt === 'late'
-                            ? 'bg-amber-500 text-slate-950 shadow-sm'
-                            : 'bg-indigo-600 text-white shadow-sm'
-                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                            ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-400'
+                            : 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-400'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
                       }`}
                     >
                       {stt}

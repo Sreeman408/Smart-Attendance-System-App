@@ -80,20 +80,20 @@ export const UniversityLogo: React.FC<UniversityLogoProps> = ({
           fontWeight="bold"
           fill="#800020"
           textAnchor="middle"
-          fontFamily="serif"
+          fontFamily="sans-serif"
           letterSpacing="0.5"
         >
-          WITH COURAGE AND FAITH
+          SMART ATTENDANCE
         </text>
       </svg>
 
       {showText && (
         <div className="flex flex-col text-left">
           <span className={`font-bold tracking-tight text-slate-900 dark:text-white ${font}`}>
-            Annamalai University
+            Smart CMS Portal
           </span>
           <span className="text-[10px] sm:text-xs font-semibold tracking-wider text-amber-600 dark:text-amber-400 uppercase">
-            Attendance Portal Gateway
+            College Attendance Gateway
           </span>
         </div>
       )}

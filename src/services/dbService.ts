@@ -66,7 +66,7 @@ async function setCachedData<T>(key: string, data: T): Promise<void> {
 // -------------------------------------------------------------
 // UNIVERSAL MULTI-DEVICE SUPABASE CLOUD SYNC ENGINE
 // -------------------------------------------------------------
-async function saveCloudRecord<T extends { id: string }>(entityType: string, record: T): Promise<boolean> {
+export async function saveCloudRecord<T extends { id: string }>(entityType: string, record: T): Promise<boolean> {
   const supabase = getSupabaseClient();
   if (!supabase) return false;
 
@@ -102,7 +102,7 @@ async function saveCloudRecord<T extends { id: string }>(entityType: string, rec
   return cloudSuccess;
 }
 
-async function deleteCloudRecord(entityType: string, id: string): Promise<boolean> {
+export async function deleteCloudRecord(entityType: string, id: string): Promise<boolean> {
   const supabase = getSupabaseClient();
   if (!supabase) return false;
 
@@ -121,7 +121,7 @@ async function deleteCloudRecord(entityType: string, id: string): Promise<boolea
   return true;
 }
 
-async function fetchCloudRecords<T>(entityType: string): Promise<T[] | null> {
+export async function fetchCloudRecords<T>(entityType: string): Promise<T[] | null> {
   const supabase = getSupabaseClient();
   if (!supabase) return null;
 
@@ -194,7 +194,8 @@ export async function fetchStudentsFromDB(): Promise<Student[]> {
       parentName: d.parent_name || d.parentName,
       parentPhone: d.parent_phone || d.parentPhone,
       avatar: d.avatar,
-      approvalStatus: d.approval_status || d.approvalStatus || 'approved'
+      approvalStatus: d.approval_status || d.approvalStatus || 'approved',
+      passwordHash: d.password_hash || d.passwordHash
     }));
     await setCachedData(PREF_KEYS.STUDENTS, mapped);
     return mapped;
@@ -221,7 +222,9 @@ export async function saveStudentToDB(student: Student): Promise<boolean> {
     parentPhone: student.parentPhone || null,
     avatar: student.avatar || null,
     approval_status: student.approvalStatus,
-    approvalStatus: student.approvalStatus
+    approvalStatus: student.approvalStatus,
+    password_hash: student.passwordHash || null,
+    passwordHash: student.passwordHash || null
   });
 
   const cached = await getCachedData<Student[]>(PREF_KEYS.STUDENTS, []);
@@ -256,7 +259,8 @@ export async function fetchFacultyFromDB(): Promise<Faculty[]> {
       designation: d.designation || 'Lecturer',
       phone: d.phone || '',
       subjectsHandled: d.subjects_handled || d.subjectsHandled || [],
-      approvalStatus: d.approval_status || d.approvalStatus || 'approved'
+      approvalStatus: d.approval_status || d.approvalStatus || 'approved',
+      passwordHash: d.password_hash || d.passwordHash
     }));
     await setCachedData(PREF_KEYS.FACULTY, mapped);
     return mapped;
@@ -275,7 +279,9 @@ export async function saveFacultyToDB(fac: Faculty): Promise<boolean> {
     designation: fac.designation,
     phone: fac.phone,
     approval_status: fac.approvalStatus,
-    approvalStatus: fac.approvalStatus
+    approvalStatus: fac.approvalStatus,
+    password_hash: fac.passwordHash || null,
+    passwordHash: fac.passwordHash || null
   });
 
   const cached = await getCachedData<Faculty[]>(PREF_KEYS.FACULTY, []);
@@ -539,7 +545,8 @@ export async function fetchRegistrationRequestsFromDB(): Promise<RegistrationReq
       parentPhone: d.parent_phone || d.parentPhone,
       status: (d.status || d.approval_status || 'pending') as ApprovalStatus,
       submittedAt: d.submitted_at || d.submittedAt || new Date().toISOString(),
-      verifiedEmail: d.verified_email || d.verifiedEmail || false
+      verifiedEmail: d.verified_email || d.verifiedEmail || false,
+      passwordHash: d.password_hash || d.passwordHash
     })).sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
 
     await setCachedData(PREF_KEYS.REGISTRATIONS, mapped);
@@ -572,7 +579,9 @@ export async function submitRegistrationRequestDB(req: RegistrationRequest): Pro
     submitted_at: req.submittedAt,
     submittedAt: req.submittedAt,
     verified_email: req.verifiedEmail,
-    verifiedEmail: req.verifiedEmail
+    verifiedEmail: req.verifiedEmail,
+    password_hash: req.passwordHash || null,
+    passwordHash: req.passwordHash || null
   });
 
   const cached = await getCachedData<RegistrationRequest[]>(PREF_KEYS.REGISTRATIONS, []);
@@ -605,7 +614,8 @@ export async function updateRegistrationStatusDB(requestId: string, status: Appr
         section: target.section || 'A',
         parentName: target.parentName,
         parentPhone: target.parentPhone,
-        approvalStatus: 'approved'
+        approvalStatus: 'approved',
+        passwordHash: target.passwordHash
       };
       await saveStudentToDB(newStudent);
 
@@ -617,6 +627,7 @@ export async function updateRegistrationStatusDB(requestId: string, status: Appr
           phone: target.parentPhone || '',
           childRollNo: newStudent.rollNo,
           childName: newStudent.name,
+          passwordHash: target.passwordHash,
           createdAt: new Date().toISOString()
         };
         await saveParentToDB(newParent);
@@ -631,7 +642,8 @@ export async function updateRegistrationStatusDB(requestId: string, status: Appr
         designation: target.designation || 'Lecturer',
         phone: target.phone || '',
         subjectsHandled: [],
-        approvalStatus: 'approved'
+        approvalStatus: 'approved',
+        passwordHash: target.passwordHash
       };
       await saveFacultyToDB(newFaculty);
     }

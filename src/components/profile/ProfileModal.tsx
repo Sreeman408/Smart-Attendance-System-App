@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { User } from '../../types';
 import { generateVerificationOTP, verifyOTPCode, saveActiveSession } from '../../services/authService';
 import { saveStudentToDB, saveFacultyToDB } from '../../services/dbService';
-import { X, Mail, ShieldCheck, CheckCircle, AlertCircle, Edit3, User as UserIcon, Building2, Phone } from 'lucide-react';
+import { ChangePasswordModal } from './ChangePasswordModal';
+import { X, Mail, ShieldCheck, CheckCircle, AlertCircle, Edit3, User as UserIcon, Building2, Phone, KeyRound } from 'lucide-react';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onUserUpdated
 }) => {
   const [isEditingEmail, setIsEditingEmail] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [newEmail, setNewEmail] = useState(currentUser.email || '');
   const [step, setStep] = useState<'view' | 'otp'>('view');
   const [generatedOTP, setGeneratedOTP] = useState('');
@@ -181,8 +183,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 </div>
               </div>
 
+              {/* Security Action: Change Password */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsChangePasswordOpen(true)}
+                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-300 dark:border-slate-700 flex items-center justify-center gap-2 transition-all"
+                >
+                  <KeyRound className="w-4 h-4 text-amber-500" />
+                  Change Account Password
+                </button>
+              </div>
+
               <div className="pt-2 text-center text-slate-400 text-xs">
-                Annamalai University CMS &bull; Logged in session active
+                Smart Attendance CMS &bull; Logged in session active
               </div>
             </div>
           )}
@@ -232,6 +246,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         </div>
 
       </div>
+
+      <ChangePasswordModal
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
+        currentUser={currentUser}
+      />
     </div>
   );
 };

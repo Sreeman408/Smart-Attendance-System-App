@@ -44,8 +44,14 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ onLoginSuccess }) =>
       return;
     }
 
+    if (!password.trim()) {
+      setErrorMsg('Please enter your account password.');
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
-      const result = await loginUser(loginInput, selectedRole);
+      const result = await loginUser(loginInput, password, selectedRole);
       setIsSubmitting(false);
 
       if (result.success && result.user) {
@@ -87,10 +93,10 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ onLoginSuccess }) =>
         {/* Title Heading */}
         <div className="text-center mb-8">
           <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
-            Annamalai University Portal Gateway
+            Smart Attendance CMS Portal
           </h1>
           <p className="text-sm sm:text-base text-slate-400 mt-2 max-w-xl mx-auto">
-            Secure, real-time college attendance management system for students, faculty, administrators, and parents.
+            Secure, multi-device college attendance management system for students, faculty, administrators, and parents.
           </p>
         </div>
 
@@ -313,7 +319,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({ onLoginSuccess }) =>
 
       {/* Footer */}
       <footer className="p-4 border-t border-slate-800/80 text-center text-xs text-slate-500">
-        Annamalai University College Attendance Management System &copy; 2026. All rights reserved.
+        Smart Attendance CMS Portal &copy; 2026. All rights reserved.
       </footer>
 
       {/* Registration Modal */}

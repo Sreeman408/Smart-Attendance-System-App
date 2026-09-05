@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Role } from '../../types';
-import { generateVerificationOTP, verifyOTPCode } from '../../services/authService';
+import { sendEmailVerificationOTP, verifyOTPCodeAsync } from '../../services/authService';
 import { submitRegistrationRequestDB } from '../../services/dbService';
 import { UniversityLogo } from '../common/UniversityLogo';
-import { X, CheckCircle, Mail, AlertCircle, ShieldCheck, UserCheck, GraduationCap, Building2, User, Key, Phone } from 'lucide-react';
+import { hashPassword } from '../../utils/cryptoUtils';
+import { X, CheckCircle, Mail, AlertCircle, ShieldCheck, UserCheck, GraduationCap, Building2, User, Key, Phone, Lock } from 'lucide-react';
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -20,9 +21,13 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 }) => {
   const [role, setRole] = useState<'student' | 'faculty'>(initialRole);
   
-  // Student Form Fields
+  // Form Fields
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Student Form Fields
   const [rollNo, setRollNo] = useState('');
   const [department, setDepartment] = useState('Computer Science');
   const [year, setYear] = useState('2nd Year');
@@ -38,19 +43,29 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
   // OTP Verification State
   const [step, setStep] = useState<'form' | 'otp' | 'pending'>('form');
-  const [generatedOTP, setGeneratedOTP] = useState('');
+  const [otpInfoMsg, setOtpInfoMsg] = useState('');
   const [userOTPInput, setUserOTPInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
     if (!name.trim() || !email.trim()) {
       setErrorMsg('Please fill in all required fields.');
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      setErrorMsg('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMsg('Passwords do not match. Please check your password input.');
       return;
     }
 
@@ -64,9 +79,17 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       return;
     }
 
-    // Generate Verification Code
-    const code = generateVerificationOTP(email);
-    setGeneratedOTP(code);
+    setLoading(true);
+    // Send Real Email OTP via Supabase Auth / Service
+    const res = await sendEmailVerificationOTP(email);
+    setLoading(false);
+
+    if (!res.success) {
+      setErrorMsg(res.message || 'Failed to send verification email. Please try again.');
+      return;
+    }
+
+    setOtpInfoMsg(res.message);
     setStep('otp');
   };
 
@@ -75,12 +98,14 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     setErrorMsg('');
     setLoading(true);
 
-    const isCorrect = verifyOTPCode(email, userOTPInput);
-    if (!isCorrect && userOTPInput !== generatedOTP) {
-      setErrorMsg('Invalid or expired verification code. Please check your code and try again.');
+    const isCorrect = await verifyOTPCodeAsync(email, userOTPInput);
+    if (!isCorrect) {
+      setErrorMsg('Invalid or expired verification code. Please check your email and try again.');
       setLoading(false);
       return;
     }
+
+    const hashedPwd = await hashPassword(password);
 
     // Prepare Registration Request for Admin Queue
     const requestId = `REQ_${Date.now()}`;
@@ -101,13 +126,14 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       parentPhone: role === 'student' ? parentPhone : undefined,
       status: 'pending' as const,
       submittedAt: new Date().toISOString(),
-      verifiedEmail: true
+      verifiedEmail: true,
+      passwordHash: hashedPwd
     };
 
     const savedOk = await submitRegistrationRequestDB(reqData);
     setLoading(false);
     if (!savedOk) {
-      setErrorMsg('Failed to save registration application. Please try again.');
+      setErrorMsg('Failed to save registration application to Cloud Database. Please check your internet connection.');
       return;
     }
     setStep('pending');
@@ -127,8 +153,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           <div className="flex items-center gap-3">
             <UniversityLogo size="sm" />
             <div>
-              <h3 className="font-bold text-lg leading-tight">University Registration</h3>
-              <p className="text-xs text-amber-300 font-medium">Create your official CMS Profile</p>
+              <h3 className="font-bold text-lg leading-tight">Portal Registration</h3>
+              <p className="text-xs text-amber-300 font-medium">Create your official CMS Profile & Credentials</p>
             </div>
           </div>
           <button
@@ -210,9 +236,45 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                     required
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    placeholder="e.g. student@annamalai.edu"
+                    placeholder="e.g. student@college.edu"
                     className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   />
+                </div>
+              </div>
+
+              {/* Create Password & Confirm Password */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                    Password *
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <input
+                      type="password"
+                      required
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="Min 6 chars"
+                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                    Confirm Password *
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <input
+                      type="password"
+                      required
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter password"
+                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -390,15 +452,16 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
               <button
                 type="submit"
+                disabled={loading}
                 className="w-full mt-4 py-3 bg-gradient-to-r from-red-900 to-amber-600 text-white font-bold rounded-xl shadow-lg hover:brightness-110 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
               >
                 <ShieldCheck className="w-4 h-4" />
-                Proceed to Email Verification
+                {loading ? 'Sending Verification Code...' : 'Proceed to Real Email Verification'}
               </button>
             </form>
           )}
 
-          {/* STEP 2: OTP Verification */}
+          {/* STEP 2: Real OTP Verification */}
           {step === 'otp' && (
             <form onSubmit={handleVerifyAndSubmit} className="space-y-4">
               <div className="text-center py-2">
@@ -407,14 +470,16 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                 </div>
                 <h4 className="font-bold text-base text-slate-900 dark:text-white">Verify Email Address</h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Enter the 6-digit verification code sent to <strong className="text-slate-800 dark:text-slate-200">{email}</strong>
+                  Enter the verification code sent to <strong className="text-slate-800 dark:text-slate-200">{email}</strong>
                 </p>
               </div>
 
-              {/* Demo OTP Banner for Instant Testing */}
-              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-300 text-xs text-center font-mono">
-                Verification Code: <strong className="text-sm font-bold tracking-widest text-red-700 dark:text-amber-400">{generatedOTP}</strong>
-              </div>
+              {/* Real OTP Banner info */}
+              {otpInfoMsg && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-300 text-xs text-center font-mono">
+                  {otpInfoMsg}
+                </div>
+              )}
 
               {errorMsg && (
                 <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 text-red-600 text-xs rounded-xl">
@@ -424,7 +489,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1 text-center">
-                  6-Digit OTP Code
+                  Verification Code (OTP)
                 </label>
                 <input
                   type="text"
@@ -464,11 +529,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               </div>
               <h4 className="font-bold text-xl text-slate-900 dark:text-white">Registration Application Submitted!</h4>
               <p className="text-sm text-slate-600 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
-                Your profile details have been sent to the Admin Registry. Once approved by the administrator, you will be able to log in with your credentials.
+                Your profile & credentials have been sent to the Admin Registry. Once approved by the administrator, you will be able to log in with your chosen password.
               </p>
-              <div className="p-3 bg-slate-100 dark:bg-slate-800/60 rounded-xl text-xs text-slate-500">
-                Application ID: <span className="font-mono font-bold text-amber-600 dark:text-amber-400">REQ_{Date.now().toString().slice(-6)}</span>
-              </div>
               <button
                 onClick={handleFinish}
                 className="w-full py-3 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-950 font-bold rounded-xl shadow-lg"
@@ -479,7 +541,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           )}
 
         </div>
-
       </div>
     </div>
   );

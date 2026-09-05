@@ -35,6 +35,7 @@ export interface Student {
   parentPhone?: string;
   avatar?: string;
   approvalStatus: ApprovalStatus;
+  passwordHash?: string;
   createdAt?: string;
 }
 
@@ -48,6 +49,7 @@ export interface Faculty {
   phone: string;
   subjectsHandled: string[]; // Subject IDs
   approvalStatus: ApprovalStatus;
+  passwordHash?: string;
   createdAt?: string;
 }
 
@@ -166,6 +168,7 @@ export interface RegistrationRequest {
   status: ApprovalStatus;
   submittedAt: string;
   verifiedEmail: boolean;
+  passwordHash?: string;
 }
 
 export interface AttendanceSummary {
@@ -189,6 +192,7 @@ export interface ParentRecord {
   phone: string;
   childRollNo: string;
   childName?: string;
+  passwordHash?: string;
   createdAt?: string;
 }
 
