@@ -1020,7 +1020,7 @@ export async function saveSaturdayConfigToDB(config: SaturdayConfig, updatedBy: 
 export async function fetchAttendanceRecordsFromDB(): Promise<AttendanceRecord[]> {
   const cloudData = await fetchCloudRecords<any>('attendance_records');
   if (cloudData !== null) {
-    const mapped: AttendanceRecord[] = cloudData.map((d: any) => ({
+    const rawMapped: AttendanceRecord[] = cloudData.map((d: any) => ({
       id: d.id,
       date: d.date,
       studentId: d.student_id || d.studentId,
@@ -1034,53 +1034,213 @@ export async function fetchAttendanceRecordsFromDB(): Promise<AttendanceRecord[]
       method: d.method || 'manual',
       notes: d.notes,
       isSaturday: d.is_saturday ?? d.isSaturday ?? false
-    })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }));
 
-    await setCachedData(PREF_KEYS.ATTENDANCE, mapped);
-    return mapped;
+    // Deduplicate against multiple saves for the same student + subject + date (+ slot)
+    // Sort newest markedAt first so we keep the latest update
+    rawMapped.sort((a, b) => new Date(b.markedAt || b.date).getTime() - new Date(a.markedAt || a.date).getTime());
+    const dedupedMap = new Map<string, AttendanceRecord>();
+    for (const rec of rawMapped) {
+      const key = `${rec.studentId}__${rec.subjectId}__${rec.date}${rec.slotId ? '__' + rec.slotId : ''}`;
+      if (!dedupedMap.has(key)) {
+        dedupedMap.set(key, rec);
+      }
+    }
+
+    const cleanRecords = Array.from(dedupedMap.values()).sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+
+    await setCachedData(PREF_KEYS.ATTENDANCE, cleanRecords);
+    return cleanRecords;
   }
-  return getCachedData<AttendanceRecord[]>(PREF_KEYS.ATTENDANCE, generateSeedAttendance());
+
+  const cached = await getCachedData<AttendanceRecord[]>(PREF_KEYS.ATTENDANCE, generateSeedAttendance());
+  // Deduplicate cached records as well
+  const dedupedCache = new Map<string, AttendanceRecord>();
+  cached.sort((a, b) => new Date(b.markedAt || b.date).getTime() - new Date(a.markedAt || a.date).getTime());
+  for (const rec of cached) {
+    const key = `${rec.studentId}__${rec.subjectId}__${rec.date}${rec.slotId ? '__' + rec.slotId : ''}`;
+    if (!dedupedCache.has(key)) {
+      dedupedCache.set(key, rec);
+    }
+  }
+  return Array.from(dedupedCache.values()).sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
 }
 
 export async function addAttendanceRecordToDB(record: AttendanceRecord): Promise<boolean> {
+  const cached = await getCachedData<AttendanceRecord[]>(PREF_KEYS.ATTENDANCE, []);
+  
+  // Find existing record by ID or composite key (studentId + subjectId + date)
+  const existingIdx = cached.findIndex(
+    r => r.id === record.id || (
+      r.studentId === record.studentId &&
+      r.subjectId === record.subjectId &&
+      r.date === record.date &&
+      (!record.slotId || !r.slotId || r.slotId === record.slotId)
+    )
+  );
+
+  let targetId = record.id;
+  let oldIdToDelete: string | null = null;
+  if (existingIdx >= 0) {
+    const existing = cached[existingIdx];
+    if (existing.id !== record.id) {
+      oldIdToDelete = existing.id;
+    }
+    targetId = existing.id;
+  }
+
+  const cleanRecord: AttendanceRecord = { ...record, id: targetId };
+
   const cloudOk = await saveCloudRecord('attendance_records', {
-    id: record.id,
-    date: record.date,
-    student_id: record.studentId,
-    studentId: record.studentId,
-    subject_id: record.subjectId,
-    subjectId: record.subjectId,
-    subject_type: record.subjectType,
-    subjectType: record.subjectType,
-    status: record.status,
-    slot_id: record.slotId || null,
-    slotId: record.slotId || null,
-    marked_by_faculty_id: record.markedByFacultyId,
-    markedByFacultyId: record.markedByFacultyId,
-    marked_at: record.markedAt,
-    markedAt: record.markedAt,
-    method: record.method || 'manual',
-    notes: record.notes || null,
-    is_saturday: record.isSaturday || false,
-    isSaturday: record.isSaturday || false
+    id: cleanRecord.id,
+    date: cleanRecord.date,
+    student_id: cleanRecord.studentId,
+    studentId: cleanRecord.studentId,
+    subject_id: cleanRecord.subjectId,
+    subjectId: cleanRecord.subjectId,
+    subject_type: cleanRecord.subjectType,
+    subjectType: cleanRecord.subjectType,
+    status: cleanRecord.status,
+    slot_id: cleanRecord.slotId || null,
+    slotId: cleanRecord.slotId || null,
+    marked_by_faculty_id: cleanRecord.markedByFacultyId,
+    markedByFacultyId: cleanRecord.markedByFacultyId,
+    marked_at: cleanRecord.markedAt,
+    markedAt: cleanRecord.markedAt,
+    method: cleanRecord.method || 'manual',
+    notes: cleanRecord.notes || null,
+    is_saturday: cleanRecord.isSaturday || false,
+    isSaturday: cleanRecord.isSaturday || false
   });
 
-  const cached = await getCachedData<AttendanceRecord[]>(PREF_KEYS.ATTENDANCE, []);
-  const idx = cached.findIndex(r => r.id === record.id);
-  if (idx >= 0) cached[idx] = record;
-  else cached.unshift(record);
+  if (oldIdToDelete) {
+    await deleteCloudRecord('attendance_records', oldIdToDelete);
+  }
+
+  if (existingIdx >= 0) {
+    cached[existingIdx] = cleanRecord;
+  } else {
+    cached.unshift(cleanRecord);
+  }
   await setCachedData(PREF_KEYS.ATTENDANCE, cached);
 
   return cloudOk;
 }
 
 export async function saveBatchAttendanceDB(records: AttendanceRecord[]): Promise<boolean> {
-  let allOk = true;
+  if (!records || records.length === 0) return true;
+
+  const cached = await getCachedData<AttendanceRecord[]>(PREF_KEYS.ATTENDANCE, []);
+  const supabase = getSupabaseClient();
+
+  // 1. Deduplicate within the incoming batch
+  const batchMap = new Map<string, AttendanceRecord>();
   for (const r of records) {
-    const ok = await addAttendanceRecordToDB(r);
-    if (!ok) allOk = false;
+    const key = `${r.studentId}__${r.subjectId}__${r.date}${r.slotId ? '__' + r.slotId : ''}`;
+    batchMap.set(key, r);
   }
-  return allOk;
+  const cleanBatch = Array.from(batchMap.values());
+
+  // 2. Identify existing records to update without duplicating
+  const idsToDelete: string[] = [];
+  const finalBatchToSave = cleanBatch.map(r => {
+    const existing = cached.find(
+      c => c.studentId === r.studentId &&
+           c.subjectId === r.subjectId &&
+           c.date === r.date &&
+           (!r.slotId || !c.slotId || c.slotId === r.slotId)
+    );
+    if (existing && existing.id !== r.id) {
+      idsToDelete.push(existing.id);
+    }
+    const finalId = existing ? existing.id : r.id;
+    return { ...r, id: finalId };
+  });
+
+  // 3. Update local cache immediately
+  const finalCacheMap = new Map<string, AttendanceRecord>();
+  for (const c of cached) {
+    const key = `${c.studentId}__${c.subjectId}__${c.date}${c.slotId ? '__' + c.slotId : ''}`;
+    finalCacheMap.set(key, c);
+  }
+  for (const r of finalBatchToSave) {
+    const key = `${r.studentId}__${r.subjectId}__${r.date}${r.slotId ? '__' + r.slotId : ''}`;
+    finalCacheMap.set(key, r);
+  }
+  const newCachedList = Array.from(finalCacheMap.values()).sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+  await setCachedData(PREF_KEYS.ATTENDANCE, newCachedList);
+
+  // 4. Cloud batch upsert to Supabase
+  let cloudSuccess = true;
+  if (supabase) {
+    try {
+      const dbPayload = finalBatchToSave.map(record => ({
+        id: record.id,
+        date: record.date,
+        student_id: record.studentId,
+        studentId: record.studentId,
+        subject_id: record.subjectId,
+        subjectId: record.subjectId,
+        subject_type: record.subjectType,
+        subjectType: record.subjectType,
+        status: record.status,
+        slot_id: record.slotId || null,
+        slotId: record.slotId || null,
+        marked_by_faculty_id: record.markedByFacultyId,
+        markedByFacultyId: record.markedByFacultyId,
+        marked_at: record.markedAt,
+        markedAt: record.markedAt,
+        method: record.method || 'manual',
+        notes: record.notes || null,
+        is_saturday: record.isSaturday || false,
+        isSaturday: record.isSaturday || false
+      }));
+
+      const { error: batchErr } = await supabase.from('attendance_records').upsert(dbPayload);
+      if (batchErr) {
+        console.warn('Native batch attendance upsert failed, syncing via audit_logs:', batchErr);
+      }
+
+      // Universal cloud sync store via audit_logs
+      const auditPayload = finalBatchToSave.map(record => ({
+        id: `SYNC_attendance_records_${record.id}`,
+        timestamp: record.markedAt || new Date().toISOString(),
+        user_id: record.studentId,
+        user_name: record.studentName || record.studentId,
+        role: 'attendance',
+        action: 'CLOUD_SYNC::attendance_records',
+        details: JSON.stringify(record)
+      }));
+      const { error: auditErr } = await supabase.from('audit_logs').upsert(auditPayload);
+      if (auditErr) {
+        console.warn('Audit logs sync error:', auditErr);
+      }
+
+      // Delete old obsolete IDs from cloud
+      for (const oldId of idsToDelete) {
+        await deleteCloudRecord('attendance_records', oldId);
+      }
+    } catch (e) {
+      console.warn('Supabase batch attendance error:', e);
+      cloudSuccess = false;
+    }
+  }
+
+  return cloudSuccess;
+}
+
+export async function deleteAttendanceRecordFromDB(id: string): Promise<boolean> {
+  await deleteCloudRecord('attendance_records', id);
+  const cached = await getCachedData<AttendanceRecord[]>(PREF_KEYS.ATTENDANCE, []);
+  const filtered = cached.filter(r => r.id !== id);
+  await setCachedData(PREF_KEYS.ATTENDANCE, filtered);
+  return true;
 }
 
 // -------------------------------------------------------------

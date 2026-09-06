@@ -4,9 +4,9 @@ import { QRGenerator } from '../qr/QRGenerator';
 import { ReportsManager } from '../reports/ReportsManager';
 import { LeaveManager } from '../leaves/LeaveManager';
 import { CheckSquare, QrCode, Clock, Users, CheckCircle2, Save, Calendar, Download, AlertCircle, FileSpreadsheet, MapPin } from 'lucide-react';
-import { addAttendanceRecordToDB, fetchAttendanceRecordsFromDB, fetchSaturdayConfigFromDB, addAuditLogDB } from '../../services/dbService';
+import { addAttendanceRecordToDB, saveBatchAttendanceDB, fetchAttendanceRecordsFromDB, fetchSaturdayConfigFromDB, addAuditLogDB } from '../../services/dbService';
 import { sortStudentsByRollNumber } from '../../utils/sortingUtils';
-import * as XLSX from 'xlsx';
+import { ExportPreviewModal, ColumnDef, MetricBadge } from '../common/ExportPreviewModal';
 
 interface Props {
   faculty: Faculty;
@@ -31,6 +31,16 @@ export const FacultyDashboard: React.FC<Props> = ({
   const [isSaturdaySession, setIsSaturdaySession] = useState<boolean>(false);
   const [saturdayConfig, setSaturdayConfig] = useState<SaturdayConfig>({ mappedDay: 'Monday', enabled: true });
   const [allAttendance, setAllAttendance] = useState<AttendanceRecord[]>([]);
+  const [previewConfig, setPreviewConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    subtitle?: string;
+    filenameBase: string;
+    columns: ColumnDef[];
+    data: Record<string, any>[];
+    metrics?: MetricBadge[];
+    sheetName?: string;
+  } | null>(null);
 
   // Faculty subjects
   const facultySubjects = subjects.filter(s => s.facultyId === faculty.id || (faculty.subjectsHandled && faculty.subjectsHandled.includes(s.id)));
@@ -74,9 +84,9 @@ export const FacultyDashboard: React.FC<Props> = ({
   const handleSaveAttendance = async () => {
     if (!currentSubject) return;
 
-    for (const st of students) {
+    const recordsToSave: AttendanceRecord[] = students.map(st => {
       const status = attendanceMap[st.id] || 'present';
-      const record: AttendanceRecord = {
+      return {
         id: `att_${selectedDate}_${currentSubject.id}_${st.id}`,
         date: selectedDate,
         studentId: st.id,
@@ -90,8 +100,9 @@ export const FacultyDashboard: React.FC<Props> = ({
         method: 'manual',
         isSaturday: isSaturdaySession
       };
-      await addAttendanceRecordToDB(record);
-    }
+    });
+
+    const ok = await saveBatchAttendanceDB(recordsToSave);
 
     await addAuditLogDB(
       faculty.id,
@@ -104,69 +115,169 @@ export const FacultyDashboard: React.FC<Props> = ({
     const updatedRecs = await fetchAttendanceRecordsFromDB();
     setAllAttendance(updatedRecs);
 
-    setSaveSuccessMsg(`✅ Saved ${isSaturdaySession ? 'Saturday' : ''} attendance for ${currentSubject.name} on ${selectedDate}!`);
+    if (ok) {
+      setSaveSuccessMsg(`✅ Successfully recorded ${isSaturdaySession ? 'Saturday' : ''} attendance for ${currentSubject.name} on ${selectedDate}! (${students.length} students)`);
+    } else {
+      setSaveSuccessMsg(`⚠️ Saved attendance locally, pending cloud sync for ${currentSubject.name}.`);
+    }
     setTimeout(() => setSaveSuccessMsg(null), 4000);
   };
 
-  const exportClassPercentageReport = () => {
+  const openClassPercentagePreview = () => {
     if (!currentSubject) return;
 
     const subjectRecords = allAttendance.filter(r => r.subjectId === currentSubject.id);
+    let maxHeld = 0;
+    let safeCount = 0;
+    let shortageCount = 0;
+    let borderlineCount = 0;
+    let totalPctSum = 0;
 
     const reportRows = sortedStudents.map(st => {
       const studentRecs = subjectRecords.filter(r => r.studentId === st.id);
       const totalClasses = studentRecs.length;
-      const attendedClasses = studentRecs.filter(r => r.status === 'present').length;
+      if (totalClasses > maxHeld) maxHeld = totalClasses;
+      const attendedClasses = studentRecs.filter(r => r.status === 'present' || r.status === 'excused').length;
       const percentage = totalClasses > 0 ? Math.round((attendedClasses / totalClasses) * 100) : 100;
-      
+      totalPctSum += percentage;
+
       let statusTag = 'Safe';
-      if (percentage < 65) statusTag = 'Shortage';
-      else if (percentage < 75) statusTag = 'Borderline';
+      if (percentage < 65) {
+        statusTag = 'Shortage';
+        shortageCount++;
+      } else if (percentage < 75) {
+        statusTag = 'Borderline';
+        borderlineCount++;
+      } else {
+        safeCount++;
+      }
 
       return {
-        'Student Roll No': st.rollNo,
-        'Student Name': st.name,
-        'Department': st.department,
-        'Semester & Section': `Sem ${st.semester} (${st.section})`,
-        'Subject Code': currentSubject.code,
-        'Subject Name': currentSubject.name,
-        'Total Classes Held': totalClasses,
-        'Classes Attended': attendedClasses,
-        'Attendance Percentage (%)': `${percentage}%`,
-        'Status Tag': statusTag
+        rollNo: st.rollNo,
+        name: st.name,
+        department: st.department,
+        semesterSection: `Sem ${st.semester} (${st.section})`,
+        subjectCode: currentSubject.code,
+        subjectName: currentSubject.name,
+        totalClasses,
+        attendedClasses,
+        percentage: `${percentage}%`,
+        status: statusTag
       };
     });
 
-    const ws = XLSX.utils.json_to_sheet(reportRows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Class Attendance Percentage');
-    XLSX.writeFile(wb, `Class_Attendance_Report_${currentSubject.code}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    const avgPct = sortedStudents.length > 0 ? Math.round(totalPctSum / sortedStudents.length) : 100;
+
+    setPreviewConfig({
+      isOpen: true,
+      title: `${currentSubject.code} Attendance Percentage Preview`,
+      subtitle: `Verified student-by-student attendance audit for ${currentSubject.name}`,
+      filenameBase: `Class_Attendance_${currentSubject.code}`,
+      sheetName: `${currentSubject.code}_Percentage`,
+      columns: [
+        { key: 'rollNo', label: 'Roll No' },
+        { key: 'name', label: 'Student Name' },
+        { key: 'semesterSection', label: 'Semester & Section' },
+        { key: 'totalClasses', label: 'Classes Held', align: 'center' },
+        { key: 'attendedClasses', label: 'Classes Attended', align: 'center' },
+        { key: 'percentage', label: 'Attendance %', align: 'center' },
+        { key: 'status', label: 'Status' }
+      ],
+      data: reportRows,
+      metrics: [
+        { label: 'Total Enrolled', value: sortedStudents.length, color: 'blue' },
+        { label: 'Classes Held', value: maxHeld, color: 'slate' },
+        { label: 'Class Average', value: `${avgPct}%`, color: 'emerald' },
+        { label: 'Safe (>75%)', value: safeCount, color: 'emerald' },
+        { label: 'Borderline', value: borderlineCount, color: 'amber' },
+        { label: 'Shortage (<65%)', value: shortageCount, color: 'red' }
+      ]
+    });
   };
 
-  const exportSaturdayReport = () => {
+  const openSaturdayAttendancePreview = () => {
     const saturdayRecords = allAttendance.filter(r => r.isSaturday || new Date(r.date).getDay() === 6);
     if (saturdayRecords.length === 0) {
       alert('No Saturday attendance records found to export.');
       return;
     }
 
-    const reportRows = saturdayRecords.map(r => ({
-      'Date': r.date,
-      'Session Day': 'Saturday',
-      'Student Roll No': students.find(s => s.id === r.studentId)?.rollNo || r.studentId,
-      'Student Name': r.studentName || students.find(s => s.id === r.studentId)?.name || 'Student',
-      'Subject Code': currentSubject?.code || 'CS401',
-      'Subject Name': r.subjectName,
-      'Type': r.subjectType,
-      'Weight': r.subjectType === 'Practical' ? '3x (Lab)' : '1x (Lecture)',
-      'Status': r.status.toUpperCase(),
-      'Marked By': faculty.name
+    const reportRows = saturdayRecords.map(r => {
+      const matchedStudent = students.find(s => s.id === r.studentId);
+      return {
+        date: r.date,
+        day: 'Saturday',
+        rollNo: matchedStudent?.rollNo || r.studentId,
+        studentName: r.studentName || matchedStudent?.name || 'Student',
+        subjectCode: currentSubject?.code || 'CS401',
+        subjectName: r.subjectName,
+        type: r.subjectType,
+        weight: r.subjectType === 'Practical' ? '3x (Lab)' : '1x (Lecture)',
+        status: (r.status || 'present').toUpperCase(),
+        facultyName: faculty.name
+      };
+    });
+
+    setPreviewConfig({
+      isOpen: true,
+      title: 'Saturday Attendance Records Preview',
+      subtitle: `Export log of Saturday timetable substitution sessions for ${faculty.name}`,
+      filenameBase: `Saturday_Attendance_${faculty.name.replace(/\s+/g, '_')}`,
+      sheetName: 'Saturday_Attendance',
+      columns: [
+        { key: 'date', label: 'Date' },
+        { key: 'rollNo', label: 'Roll No' },
+        { key: 'studentName', label: 'Student Name' },
+        { key: 'subjectName', label: 'Subject' },
+        { key: 'weight', label: 'Weight' },
+        { key: 'status', label: 'Status' }
+      ],
+      data: reportRows,
+      metrics: [
+        { label: 'Saturday Logs', value: reportRows.length, color: 'purple' },
+        { label: 'Faculty', value: faculty.name, color: 'blue' }
+      ]
+    });
+  };
+
+  const openClassRosterPreview = () => {
+    const reportRows = sortedStudents.map(st => ({
+      rollNo: st.rollNo,
+      name: st.name,
+      email: st.email,
+      department: st.department,
+      year: st.year || '2nd Year',
+      semester: `Sem ${st.semester}`,
+      section: st.section,
+      parentName: st.parentName || '—',
+      parentPhone: st.parentPhone || '—',
+      status: st.approvalStatus || 'approved'
     }));
 
-    const ws = XLSX.utils.json_to_sheet(reportRows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Saturday Attendance');
-    XLSX.writeFile(wb, `Saturday_Attendance_${faculty.name.replace(/\s+/g, '_')}.xlsx`);
+    setPreviewConfig({
+      isOpen: true,
+      title: `${currentSubject ? currentSubject.code : 'Class'} Student Roster Preview`,
+      subtitle: `Official enrolled student roster sorted numerically by roll number`,
+      filenameBase: `Student_Roster_${currentSubject ? currentSubject.code : 'Class'}`,
+      sheetName: 'Student_Roster',
+      columns: [
+        { key: 'rollNo', label: 'Roll Number' },
+        { key: 'name', label: 'Student Name' },
+        { key: 'department', label: 'Department' },
+        { key: 'semester', label: 'Semester' },
+        { key: 'section', label: 'Section' },
+        { key: 'email', label: 'Email' },
+        { key: 'parentName', label: 'Parent Name' },
+        { key: 'parentPhone', label: 'Parent Contact' },
+        { key: 'status', label: 'Status' }
+      ],
+      data: reportRows,
+      metrics: [
+        { label: 'Enrolled Students', value: sortedStudents.length, color: 'blue' },
+        { label: 'Subject', value: currentSubject?.code || 'CS401', color: 'emerald' },
+        { label: 'Department', value: sortedStudents[0]?.department || 'CSE', color: 'slate' }
+      ]
+    });
   };
 
   // 1. QR Generator Tab
@@ -289,19 +400,19 @@ export const FacultyDashboard: React.FC<Props> = ({
 
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={exportClassPercentageReport}
+              onClick={openClassPercentagePreview}
               className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-all"
             >
               <Download className="w-4 h-4" />
-              Download Class Percentage (CSV/Excel)
+              Preview & Download Percentage
             </button>
 
             <button
-              onClick={exportSaturdayReport}
+              onClick={openSaturdayAttendancePreview}
               className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-all"
             >
               <FileSpreadsheet className="w-4 h-4" />
-              Download Saturday CSV/Excel
+              Saturday Attendance
             </button>
 
             <button
@@ -381,19 +492,29 @@ export const FacultyDashboard: React.FC<Props> = ({
 
       {/* Student Roster List */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
-        <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
           <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Users className="w-4 h-4 text-amber-500" />
             Class Student Roster ({students.length} Enrolled)
           </h4>
 
-          <button
-            onClick={handleSaveAttendance}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
-          >
-            <Save className="w-4 h-4" />
-            Save Attendance
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openClassRosterPreview}
+              className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-600" />
+              Export Class Roster
+            </button>
+
+            <button
+              onClick={handleSaveAttendance}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
+            >
+              <Save className="w-4 h-4" />
+              Save Attendance
+            </button>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -452,6 +573,21 @@ export const FacultyDashboard: React.FC<Props> = ({
           </button>
         </div>
       </div>
+
+      {/* Export Preview Modal */}
+      {previewConfig && (
+        <ExportPreviewModal
+          isOpen={previewConfig.isOpen}
+          onClose={() => setPreviewConfig(null)}
+          title={previewConfig.title}
+          subtitle={previewConfig.subtitle}
+          filenameBase={previewConfig.filenameBase}
+          sheetName={previewConfig.sheetName}
+          columns={previewConfig.columns}
+          data={previewConfig.data}
+          metrics={previewConfig.metrics}
+        />
+      )}
 
     </div>
   );

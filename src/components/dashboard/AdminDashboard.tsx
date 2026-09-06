@@ -23,7 +23,7 @@ import {
 import { calculateOverallAttendance } from '../../utils/attendance';
 import { sortStudentsByRollNumber } from '../../utils/sortingUtils';
 import { hashPassword } from '../../utils/cryptoUtils';
-import * as XLSX from 'xlsx';
+import { ExportPreviewModal, ColumnDef, MetricBadge } from '../common/ExportPreviewModal';
 
 interface Props {
   students: Student[];
@@ -74,6 +74,16 @@ export const AdminDashboard: React.FC<Props> = ({
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [previewConfig, setPreviewConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    subtitle?: string;
+    filenameBase: string;
+    columns: ColumnDef[];
+    data: Record<string, any>[];
+    metrics?: MetricBadge[];
+    sheetName?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (actionFeedback) {
@@ -151,35 +161,196 @@ export const AdminDashboard: React.FC<Props> = ({
     };
   });
 
-  // Export Overall System Summary
-  const handleExportSystemSummary = (type: 'csv' | 'xlsx') => {
-    const data = studentStats.map(s => ({
-      'Roll Number': s.student.rollNo,
-      'Student Name': s.student.name,
-      'Department': s.student.department,
-      'Year / Semester': `${s.student.year} (Sem ${s.student.semester})`,
-      'Total Classes Conducted': s.summary.totalClassesConducted,
-      'Total Classes Attended': s.summary.totalClassesAttended,
-      'Overall Attendance %': `${s.summary.percentage}%`,
-      'Risk Status': s.summary.status
-    }));
+  // Export Overall System Summary with Preview
+  const openSystemSummaryPreview = () => {
+    let totalPctSum = 0;
+    let safeCount = 0;
+    let shortageCount = 0;
+    let borderlineCount = 0;
 
-    if (type === 'csv') {
-      const headers = Object.keys(data[0] || {}).join(',');
-      const rows = data.map(obj => Object.values(obj).map(v => `"${v}"`).join(','));
-      const csvContent = 'data:text/csv;charset=utf-8,' + [headers, ...rows].join('\n');
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `Annamalai_Overall_System_Attendance_Report_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    const data = studentStats.map(s => {
+      totalPctSum += s.summary.percentage;
+      if (s.summary.status === 'Shortage') shortageCount++;
+      else if (s.summary.status === 'Borderline') borderlineCount++;
+      else safeCount++;
+
+      return {
+        rollNo: s.student.rollNo,
+        name: s.student.name,
+        department: s.student.department,
+        semester: `${s.student.year || '2nd Year'} (Sem ${s.student.semester})`,
+        classesHeld: s.summary.totalClassesConducted,
+        classesAttended: s.summary.totalClassesAttended,
+        percentage: `${s.summary.percentage}%`,
+        status: s.summary.status
+      };
+    });
+
+    const avgPct = studentStats.length > 0 ? Math.round(totalPctSum / studentStats.length) : 100;
+
+    setPreviewConfig({
+      isOpen: true,
+      title: 'Overall System Attendance Summary Preview',
+      subtitle: 'Complete student percentage performance & risk audit',
+      filenameBase: 'Annamalai_Overall_System_Attendance_Report',
+      sheetName: 'System_Summary',
+      columns: [
+        { key: 'rollNo', label: 'Roll Number' },
+        { key: 'name', label: 'Student Name' },
+        { key: 'department', label: 'Department' },
+        { key: 'semester', label: 'Year / Semester' },
+        { key: 'classesHeld', label: 'Classes Held', align: 'center' },
+        { key: 'classesAttended', label: 'Attended', align: 'center' },
+        { key: 'percentage', label: 'Attendance %', align: 'center' },
+        { key: 'status', label: 'Risk Status' }
+      ],
+      data,
+      metrics: [
+        { label: 'Total Students', value: studentStats.length, color: 'blue' },
+        { label: 'Institution Avg', value: `${avgPct}%`, color: 'emerald' },
+        { label: 'Safe (>75%)', value: safeCount, color: 'emerald' },
+        { label: 'Borderline', value: borderlineCount, color: 'amber' },
+        { label: 'Shortage (<65%)', value: shortageCount, color: 'red' }
+      ]
+    });
+  };
+
+  // Export Active Directory Roster with Preview
+  const openDirectoryRosterPreview = () => {
+    if (directoryTab === 'students') {
+      const data = sortedStudents.map(st => ({
+        rollNo: st.rollNo,
+        name: st.name,
+        email: st.email,
+        phone: st.phone || '—',
+        department: st.department,
+        year: st.year || '2nd Year',
+        semester: `Sem ${st.semester}`,
+        section: st.section,
+        parentName: st.parentName || '—',
+        parentPhone: st.parentPhone || '—',
+        status: st.approvalStatus || 'approved'
+      }));
+
+      setPreviewConfig({
+        isOpen: true,
+        title: 'Students Master Roster Preview',
+        subtitle: 'All enrolled students sorted numerically by roll number',
+        filenameBase: 'Students_Master_Roster',
+        sheetName: 'Students',
+        columns: [
+          { key: 'rollNo', label: 'Roll Number' },
+          { key: 'name', label: 'Student Name' },
+          { key: 'department', label: 'Department' },
+          { key: 'semester', label: 'Semester' },
+          { key: 'section', label: 'Section' },
+          { key: 'email', label: 'Email' },
+          { key: 'phone', label: 'Phone' },
+          { key: 'parentName', label: 'Parent Name' },
+          { key: 'parentPhone', label: 'Parent Phone' },
+          { key: 'status', label: 'Status' }
+        ],
+        data,
+        metrics: [
+          { label: 'Total Students', value: sortedStudents.length, color: 'blue' },
+          { label: 'Department', value: sortedStudents[0]?.department || 'CSE', color: 'slate' }
+        ]
+      });
+    } else if (directoryTab === 'faculty') {
+      const data = faculty.map(f => ({
+        code: f.facultyCode,
+        name: f.name,
+        email: f.email,
+        phone: f.phone || '—',
+        department: f.department,
+        designation: f.designation,
+        status: f.approvalStatus || 'approved'
+      }));
+
+      setPreviewConfig({
+        isOpen: true,
+        title: 'Faculty Registry Roster Preview',
+        subtitle: 'All registered faculty & instructors',
+        filenameBase: 'Faculty_Registry_Roster',
+        sheetName: 'Faculty',
+        columns: [
+          { key: 'code', label: 'Staff Code' },
+          { key: 'name', label: 'Faculty Name' },
+          { key: 'department', label: 'Department' },
+          { key: 'designation', label: 'Designation' },
+          { key: 'email', label: 'Email' },
+          { key: 'phone', label: 'Contact Phone' },
+          { key: 'status', label: 'Status' }
+        ],
+        data,
+        metrics: [
+          { label: 'Total Faculty', value: faculty.length, color: 'blue' }
+        ]
+      });
+    } else if (directoryTab === 'parents') {
+      const data = parents.map(p => {
+        const linked = (p.childRollNos && p.childRollNos.length > 0)
+          ? p.childRollNos.join(', ')
+          : (p.childRollNo || '—');
+        return {
+          name: p.name,
+          email: p.email,
+          phone: p.phone,
+          linkedChildren: linked
+        };
+      });
+
+      setPreviewConfig({
+        isOpen: true,
+        title: 'Parent Directory Preview',
+        subtitle: 'Guardian contacts and student linkages',
+        filenameBase: 'Parent_Directory_Roster',
+        sheetName: 'Parents',
+        columns: [
+          { key: 'name', label: 'Parent Name' },
+          { key: 'email', label: 'Email' },
+          { key: 'phone', label: 'Phone' },
+          { key: 'linkedChildren', label: 'Linked Student(s)' }
+        ],
+        data,
+        metrics: [
+          { label: 'Total Parents', value: parents.length, color: 'purple' }
+        ]
+      });
     } else {
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'System Attendance Summary');
-      XLSX.writeFile(wb, `Annamalai_Overall_System_Attendance_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+      const data = subjects.map(s => {
+        const facName = faculty.find(f => f.id === s.facultyId)?.name || 'Assigned';
+        return {
+          code: s.code,
+          name: s.name,
+          department: s.department,
+          semester: `Sem ${s.semester}`,
+          type: s.type,
+          credits: s.credits,
+          facultyIncharge: facName
+        };
+      });
+
+      setPreviewConfig({
+        isOpen: true,
+        title: 'Course & Subject Catalog Preview',
+        subtitle: 'Curriculum courses and teaching assignments',
+        filenameBase: 'Subject_Catalog_Roster',
+        sheetName: 'Subjects',
+        columns: [
+          { key: 'code', label: 'Course Code' },
+          { key: 'name', label: 'Subject Name' },
+          { key: 'department', label: 'Department' },
+          { key: 'semester', label: 'Semester' },
+          { key: 'type', label: 'Type' },
+          { key: 'credits', label: 'Credits', align: 'center' },
+          { key: 'facultyIncharge', label: 'Faculty In-Charge' }
+        ],
+        data,
+        metrics: [
+          { label: 'Total Subjects', value: subjects.length, color: 'emerald' }
+        ]
+      });
     }
   };
 
@@ -728,19 +899,12 @@ export const AdminDashboard: React.FC<Props> = ({
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => handleExportSystemSummary('csv')}
-                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1 transition-all"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-500" />
-                Export CSV
-              </button>
-
-              <button
-                onClick={() => handleExportSystemSummary('xlsx')}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center gap-1 shadow-xs transition-all"
+                type="button"
+                onClick={openSystemSummaryPreview}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-all"
               >
                 <Download className="w-3.5 h-3.5" />
-                Export Excel (.xlsx)
+                Preview & Export System Summary
               </button>
             </div>
           </div>
@@ -749,10 +913,20 @@ export const AdminDashboard: React.FC<Props> = ({
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-4">
             
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Users className="w-4 h-4 text-amber-500" />
-                System Directory
-              </h4>
+              <div className="flex items-center gap-3">
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Users className="w-4 h-4 text-amber-500" />
+                  System Directory
+                </h4>
+                <button
+                  type="button"
+                  onClick={openDirectoryRosterPreview}
+                  className="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 shadow-2xs transition-all"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-500" />
+                  Export {directoryTab.charAt(0).toUpperCase() + directoryTab.slice(1)} Roster
+                </button>
+              </div>
 
               {/* Directory Entity Sub-Tabs */}
               <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
@@ -2057,6 +2231,21 @@ export const AdminDashboard: React.FC<Props> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Export Preview Modal */}
+      {previewConfig && (
+        <ExportPreviewModal
+          isOpen={previewConfig.isOpen}
+          onClose={() => setPreviewConfig(null)}
+          title={previewConfig.title}
+          subtitle={previewConfig.subtitle}
+          filenameBase={previewConfig.filenameBase}
+          sheetName={previewConfig.sheetName}
+          columns={previewConfig.columns}
+          data={previewConfig.data}
+          metrics={previewConfig.metrics}
+        />
       )}
 
     </div>
